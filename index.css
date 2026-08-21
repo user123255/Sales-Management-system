@@ -1,0 +1,799 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/* =========================================================
+   SOMS — SALES & ORDER MANAGEMENT SYSTEM
+   GLOBAL DESIGN SYSTEM
+========================================================= */
+
+:root {
+  /* -------------------------------------------------------
+     TYPOGRAPHY
+  ------------------------------------------------------- */
+
+  font-family:
+    'Inter',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* -------------------------------------------------------
+     BRAND
+  ------------------------------------------------------- */
+
+  --soms-navy: #0b1220;
+  --soms-navy-2: #111c31;
+  --soms-navy-3: #17233a;
+
+  --soms-blue: #2563eb;
+  --soms-blue-dark: #1d4ed8;
+  --soms-blue-light: #3b82f6;
+  --soms-blue-soft: #eff6ff;
+
+  /* -------------------------------------------------------
+     DEPARTMENTS
+  ------------------------------------------------------- */
+
+  --soms-finance: #2563eb;
+  --soms-butchery: #d97706;
+  --soms-operations: #059669;
+
+  /* -------------------------------------------------------
+     STATUS COLORS
+  ------------------------------------------------------- */
+
+  --soms-success: #059669;
+  --soms-success-soft: #ecfdf5;
+
+  --soms-warning: #d97706;
+  --soms-warning-soft: #fffbeb;
+
+  --soms-processing: #4f46e5;
+  --soms-processing-soft: #eef2ff;
+
+  --soms-ready: #7c3aed;
+  --soms-ready-soft: #f5f3ff;
+
+  --soms-danger: #dc2626;
+  --soms-danger-soft: #fef2f2;
+
+  /* -------------------------------------------------------
+     SURFACES
+  ------------------------------------------------------- */
+
+  --soms-background: #f8fafc;
+  --soms-surface: #ffffff;
+  --soms-surface-soft: #f1f5f9;
+
+  /* -------------------------------------------------------
+     BORDERS
+  ------------------------------------------------------- */
+
+  --soms-border: #e2e8f0;
+  --soms-border-light: #eef2f7;
+
+  /* -------------------------------------------------------
+     TEXT
+  ------------------------------------------------------- */
+
+  --soms-text: #0f172a;
+  --soms-text-secondary: #334155;
+  --soms-muted: #64748b;
+  --soms-placeholder: #94a3b8;
+
+  /* -------------------------------------------------------
+     SHADOWS
+  ------------------------------------------------------- */
+
+  --soms-shadow-sm:
+    0 1px 2px rgba(15, 23, 42, 0.04);
+
+  --soms-shadow:
+    0 10px 30px rgba(15, 23, 42, 0.06);
+
+  --soms-shadow-lg:
+    0 20px 50px rgba(15, 23, 42, 0.10);
+
+  --soms-shadow-xl:
+    0 30px 70px rgba(15, 23, 42, 0.14);
+
+  /* -------------------------------------------------------
+     RADIUS
+  ------------------------------------------------------- */
+
+  --soms-radius-sm: 10px;
+  --soms-radius: 14px;
+  --soms-radius-lg: 18px;
+  --soms-radius-xl: 24px;
+
+  /* -------------------------------------------------------
+     MOTION
+  ------------------------------------------------------- */
+
+  --soms-transition-fast: 150ms ease;
+  --soms-transition: 220ms ease;
+  --soms-transition-slow: 320ms ease;
+}
+
+/* =========================================================
+   GLOBAL RESET
+========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  min-width: 320px;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(37, 99, 235, 0.045),
+      transparent 30%
+    ),
+    var(--soms-background);
+
+  color: var(--soms-text);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* =========================================================
+   SELECTION
+========================================================= */
+
+::selection {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+/* =========================================================
+   FOCUS
+========================================================= */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =========================================================
+   PAGE TRANSITIONS
+========================================================= */
+
+.soms-page {
+  animation:
+    somsPageEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.soms-page-enter {
+  animation:
+    somsPageEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes somsPageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================================================
+   FADE
+========================================================= */
+
+.soms-fade-in {
+  animation: somsFadeIn 220ms ease-out both;
+}
+
+@keyframes somsFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* =========================================================
+   SCALE
+========================================================= */
+
+.soms-scale-in {
+  animation:
+    somsScaleIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes somsScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* =========================================================
+   SLIDE
+========================================================= */
+
+.soms-slide-in {
+  animation:
+    somsSlideIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes somsSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* =========================================================
+   CARDS
+========================================================= */
+
+.soms-card {
+  background: var(--soms-surface);
+  border: 1px solid var(--soms-border);
+  border-radius: var(--soms-radius-lg);
+  box-shadow: var(--soms-shadow-sm);
+
+  transition:
+    transform var(--soms-transition),
+    box-shadow var(--soms-transition),
+    border-color var(--soms-transition);
+}
+
+.soms-card:hover {
+  border-color: #d7dee8;
+  box-shadow: var(--soms-shadow);
+  transform: translateY(-1px);
+}
+
+.soms-card-static {
+  background: var(--soms-surface);
+  border: 1px solid var(--soms-border);
+  border-radius: var(--soms-radius-lg);
+  box-shadow: var(--soms-shadow-sm);
+}
+
+/* =========================================================
+   HOVER
+========================================================= */
+
+.soms-hover {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+}
+
+.soms-hover:hover {
+  transform: translateY(-2px);
+}
+
+/* =========================================================
+   GLASS
+========================================================= */
+
+.soms-glass {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.soms-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  border-radius: 12px;
+  font-weight: 700;
+
+  transition:
+    transform var(--soms-transition-fast),
+    box-shadow var(--soms-transition-fast),
+    background-color var(--soms-transition-fast),
+    border-color var(--soms-transition-fast);
+}
+
+.soms-button:hover {
+  transform: translateY(-1px);
+}
+
+.soms-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.soms-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+/* =========================================================
+   INPUTS
+========================================================= */
+
+.soms-input {
+  width: 100%;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+
+  background: #ffffff;
+  color: var(--soms-text);
+
+  padding: 11px 13px;
+
+  outline: none;
+
+  transition:
+    border-color var(--soms-transition-fast),
+    box-shadow var(--soms-transition-fast),
+    background-color var(--soms-transition-fast);
+}
+
+.soms-input::placeholder {
+  color: var(--soms-placeholder);
+}
+
+.soms-input:hover {
+  border-color: #94a3b8;
+}
+
+.soms-input:focus {
+  border-color: var(--soms-blue);
+
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, 0.10);
+}
+
+.soms-input:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+/* =========================================================
+   STATUS BADGES
+========================================================= */
+
+.soms-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  border-radius: 999px;
+  padding: 6px 10px;
+
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.soms-status-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.soms-status-pending {
+  color: #92400e;
+  background: var(--soms-warning-soft);
+}
+
+.soms-status-processing {
+  color: #3730a3;
+  background: var(--soms-processing-soft);
+}
+
+.soms-status-ready {
+  color: #6d28d9;
+  background: var(--soms-ready-soft);
+}
+
+.soms-status-completed {
+  color: #047857;
+  background: var(--soms-success-soft);
+}
+
+.soms-status-cancelled {
+  color: #b91c1c;
+  background: var(--soms-danger-soft);
+}
+
+/* =========================================================
+   LIVE INDICATOR
+========================================================= */
+
+.soms-live-dot {
+  position: relative;
+
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.soms-live-dot::after {
+  content: '';
+
+  position: absolute;
+  inset: -4px;
+
+  border-radius: 50%;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+
+  animation:
+    somsLivePulse 1.8s ease-out infinite;
+}
+
+@keyframes somsLivePulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.8;
+  }
+
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* =========================================================
+   TABLES
+========================================================= */
+
+.soms-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.soms-table th {
+  background: #f8fafc;
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+
+  padding: 12px 16px;
+
+  border-bottom: 1px solid var(--soms-border);
+}
+
+.soms-table td {
+  padding: 14px 16px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  font-size: 13px;
+}
+
+.soms-table tbody tr {
+  transition:
+    background-color var(--soms-transition-fast);
+}
+
+.soms-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* =========================================================
+   SKELETON
+========================================================= */
+
+.soms-skeleton {
+  background:
+    linear-gradient(
+      90deg,
+      #f1f5f9 25%,
+      #e2e8f0 50%,
+      #f1f5f9 75%
+    );
+
+  background-size: 200% 100%;
+
+  animation:
+    somsSkeleton 1.5s infinite;
+
+  border-radius: 8px;
+}
+
+@keyframes somsSkeleton {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* =========================================================
+   ALERTS
+========================================================= */
+
+.soms-alert {
+  border-radius: 14px;
+  padding: 14px 16px;
+
+  animation:
+    somsScaleIn 220ms ease-out both;
+}
+
+/* =========================================================
+   MODALS
+========================================================= */
+
+.soms-overlay {
+  animation:
+    somsFadeIn 180ms ease-out both;
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.soms-modal {
+  animation:
+    somsScaleIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* =========================================================
+   AUTHENTICATION
+========================================================= */
+
+.soms-auth-background {
+  min-height: 100vh;
+
+  background:
+    radial-gradient(
+      circle at 10% 10%,
+      rgba(37, 99, 235, 0.10),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 90% 90%,
+      rgba(79, 70, 229, 0.08),
+      transparent 30%
+    ),
+    #f8fafc;
+}
+
+.soms-auth-card {
+  background: rgba(255, 255, 255, 0.96);
+
+  border: 1px solid rgba(226, 232, 240, 0.9);
+
+  border-radius: 24px;
+
+  box-shadow:
+    0 30px 80px rgba(15, 23, 42, 0.10),
+    0 8px 25px rgba(15, 23, 42, 0.05);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print {
+  body {
+    background: white !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+}
+
+.print-only {
+  display: none;
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 768px) {
+  .soms-card:hover {
+    transform: none;
+    box-shadow: var(--soms-shadow-sm);
+  }
+
+  .soms-table {
+    min-width: 720px;
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================================
+   SETTINGS PAGE
+   ========================================================= */
+
+.soms-settings-nav {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+  color: var(--slate-700);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.soms-settings-nav:hover {
+  background: var(--slate-100) !important;
+  color: var(--blue-600);
+  transform: translateX(2px);
+}
+
+.soms-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.soms-settings-row:last-child {
+  border-bottom: none;
+}
+
+.soms-settings-row strong {
+  display: block;
+  color: var(--slate-800);
+  font-size: 14px;
+}
+
+.soms-settings-row p {
+  margin: 5px 0 0;
+  color: var(--slate-500);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.soms-form-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slate-700);
+}
+
+@media (max-width: 760px) {
+  .soms-settings-row {
+    align-items: flex-start;
+  }
+
+  .soms-settings-nav {
+    padding: 10px;
+  }
+}
