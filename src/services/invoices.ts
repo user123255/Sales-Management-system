@@ -1,6 +1,11 @@
-
 import { supabase, getFriendlyError } from '../lib/supabase';
-import type { Invoice, InvoiceItem, Payment, Debtor, PaymentMethod } from '../types/database';
+import type {
+  Invoice,
+  InvoiceItem,
+  Payment,
+  Debtor,
+  PaymentMethod,
+} from '../types/database';
 import { getInvoiceStatus } from '../lib/utils';
 
 export async function fetchInvoices(filters?: {
@@ -16,19 +21,30 @@ export async function fetchInvoices(filters?: {
     `)
     .order('created_at', { ascending: false });
 
-  if (filters?.status) query = query.eq('status', filters.status);
-  if (filters?.search) {
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status);
+  }
+
+  if (filters?.search?.trim()) {
+    const search = filters.search.trim();
+
     query = query.or(
-      `invoice_number.ilike.%${filters.search}%,customer_name.ilike.%${filters.search}%`
+      `invoice_number.ilike.%${search}%,customer_name.ilike.%${search}%`
     );
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(getFriendlyError(error));
+
+  if (error) {
+    throw new Error(getFriendlyError(error));
+  }
+
   return (data || []) as Invoice[];
 }
 
-export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
+export async function fetchInvoiceById(
+  id: string
+): Promise<Invoice | null> {
   const { data, error } = await supabase
     .from('invoices')
     .select(`
@@ -37,10 +53,13 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
       order:orders(order_number, id)
     `)
     .eq('id', id)
-    .single();
+    .maybeSingle();
 
-  if (error) throw new Error(getFriendlyError(error));
-  return data as Invoice;
+  if (error) {
+    throw new Error(getFriendlyError(error));
+  }
+
+  return data as Invoice | null;
 }
 
 export async function createInvoice(input: {
@@ -49,76 +68,172 @@ export async function createInvoice(input: {
   due_date: string;
   notes?: string;
   order_id?: string;
-  items: { product_name: string; quantity: number; unit: string; price: number }[];
+  items: {
+    product_name: string;
+    quantity: number;
+    unit: string;
+    price: number;
+  }[];
   created_by: string;
 }): Promise<Invoice> {
-  const subtotal = input.items.reduce((s, i) => s + i.quantity * i.price, 0);
+  if (!input.customer_name.trim()) {
+    throw new Error('Customer or department name is required.');
+  }
+
+  if (!input.items.length) {
+    throw new Error('An invoice must contain at least one item.');
+  }
+
+  for (const item of input.items) {
+    if (!item.product_name.trim()) {
+      throw new Error('Every invoice item must have a product name.');
+    }
+
+    if (item.quantity <= 0) {
+      throw new Error(
+        `Quantity for ${item.product_name} must be greater than zero.`
+      );
+    }
+
+    if (item.price < 0) {
+      throw new Error(
+        `Price for ${item.product_name} cannot be negative.`
+      );
+    }
+  }
+
+  const subtotal = input.items.reduce(
+    (sum, item) => sum + item.quantity * item.price,
+    0
+  );
+
   const total = subtotal;
 
-  const { data: invNum, error: numErr } = await supabase.rpc('generate_invoice_number');
-  const invoiceNumber = numErr
-    ? `INV-${Date.now()}`
-    : (invNum as string);
+  /*
+   * Invoice numbers are financial identifiers.
+   * Do not silently create a local fallback if the database
+   * generator fails.
+   */
+  const {
+    data: invoiceNumber,
+    error: numberError,
+  } = await supabase.rpc('generate_invoice_number');
+
+  if (numberError || !invoiceNumber) {
+    throw new Error(
+      numberError
+        ? getFriendlyError(numberError)
+        : 'Unable to generate a unique invoice number.'
+    );
+  }
 
   const { data, error } = await supabase
     .from('invoices')
     .insert({
-      invoice_number: invoiceNumber,
+      invoice_number: String(invoiceNumber),
       order_id: input.order_id || null,
-      customer_name: input.customer_name,
-      customer_contact: input.customer_contact || null,
+      customer_name: input.customer_name.trim(),
+      customer_contact: input.customer_contact?.trim() || null,
       subtotal,
       total,
       amount_paid: 0,
       balance: total,
       status: 'outstanding',
       due_date: input.due_date,
-      notes: input.notes || null,
+      notes: input.notes?.trim() || null,
       created_by: input.created_by,
     })
     .select()
     .single();
 
-  if (error) throw new Error(getFriendlyError(error));
+  if (error) {
+    throw new Error(getFriendlyError(error));
+  }
 
   const invoiceItems = input.items.map((item) => ({
     invoice_id: data.id,
-    product_name: item.product_name,
+    product_name: item.product_name.trim(),
     quantity: item.quantity,
     unit: item.unit,
     price: item.price,
     total: item.quantity * item.price,
   }));
 
-  await supabase.from('invoice_items').insert(invoiceItems);
+  const { error: itemsError } = await supabase
+    .from('invoice_items')
+    .insert(invoiceItems);
 
-  await upsertDebtor(input.customer_name, input.customer_contact, total);
+  if (itemsError) {
+    /*
+     * Do not leave a header-only invoice behind if its
+     * line items could not be saved.
+     */
+    await supabase
+      .from('invoices')
+      .delete()
+      .eq('id', data.id);
 
-  return data as Invoice;
+    throw new Error(getFriendlyError(itemsError));
+  }
+
+  await upsertDebtor(
+    input.customer_name.trim(),
+    input.customer_contact,
+    total
+  );
+
+  const createdInvoice = await fetchInvoiceById(data.id);
+
+  if (!createdInvoice) {
+    throw new Error(
+      'Invoice was created but could not be loaded afterwards.'
+    );
+  }
+
+  return createdInvoice;
 }
 
-async function upsertDebtor(name: string, contact: string | undefined, amount: number) {
-  const { data: existing } = await supabase
+async function upsertDebtor(
+  name: string,
+  contact: string | undefined,
+  amount: number
+) {
+  const { data: existing, error: lookupError } = await supabase
     .from('debtors')
     .select('*')
     .eq('customer_name', name)
     .maybeSingle();
 
+  if (lookupError) {
+    throw new Error(getFriendlyError(lookupError));
+  }
+
   if (existing) {
-    await supabase
+    const { error } = await supabase
       .from('debtors')
       .update({
-        total_balance: Number(existing.total_balance) + amount,
+        total_balance:
+          Number(existing.total_balance || 0) + amount,
         contact: contact || existing.contact,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id);
+
+    if (error) {
+      throw new Error(getFriendlyError(error));
+    }
   } else {
-    await supabase.from('debtors').insert({
-      customer_name: name,
-      contact: contact || null,
-      total_balance: amount,
-    });
+    const { error } = await supabase
+      .from('debtors')
+      .insert({
+        customer_name: name,
+        contact: contact || null,
+        total_balance: amount,
+      });
+
+    if (error) {
+      throw new Error(getFriendlyError(error));
+    }
   }
 }
 
@@ -140,7 +255,9 @@ export async function recordPayment(input: {
     throw new Error('Invoice not found.');
   }
 
-  if (input.amount > Number(invoice.balance)) {
+  const currentBalance = Number(invoice.balance || 0);
+
+  if (input.amount > currentBalance) {
     throw new Error(
       'Payment cannot be greater than the outstanding balance.'
     );
@@ -152,7 +269,7 @@ export async function recordPayment(input: {
       invoice_id: input.invoice_id,
       payment_method: input.payment_method,
       amount: input.amount,
-      reference: input.reference || null,
+      reference: input.reference?.trim() || null,
       payment_date: input.payment_date,
       recorded_by: input.recorded_by,
     });
@@ -162,13 +279,15 @@ export async function recordPayment(input: {
   }
 
   const newPaid =
-    Number(invoice.amount_paid) + input.amount;
+    Number(invoice.amount_paid || 0) + input.amount;
 
-  const newBalance =
-    Math.max(0, Number(invoice.total) - newPaid);
+  const newBalance = Math.max(
+    0,
+    Number(invoice.total || 0) - newPaid
+  );
 
   const newStatus = getInvoiceStatus(
-    Number(invoice.total),
+    Number(invoice.total || 0),
     newPaid,
     invoice.due_date
   );
@@ -187,12 +306,15 @@ export async function recordPayment(input: {
     throw new Error(getFriendlyError(invoiceError));
   }
 
-  // Recalculate the customer's complete outstanding balance.
+  await recalculateDebtorBalance(invoice.customer_name);
+}
+
+async function recalculateDebtorBalance(customerName: string) {
   const { data: customerInvoices, error: customerError } =
     await supabase
       .from('invoices')
       .select('balance')
-      .eq('customer_name', invoice.customer_name);
+      .eq('customer_name', customerName);
 
   if (customerError) {
     throw new Error(getFriendlyError(customerError));
@@ -200,7 +322,8 @@ export async function recordPayment(input: {
 
   const outstandingBalance =
     (customerInvoices || []).reduce(
-      (sum, item) => sum + Number(item.balance || 0),
+      (sum, invoice) =>
+        sum + Number(invoice.balance || 0),
       0
     );
 
@@ -210,30 +333,53 @@ export async function recordPayment(input: {
       total_balance: Math.max(0, outstandingBalance),
       updated_at: new Date().toISOString(),
     })
-    .eq('customer_name', invoice.customer_name);
+    .eq('customer_name', customerName);
 
   if (debtorError) {
     throw new Error(getFriendlyError(debtorError));
   }
 }
 
-export async function fetchDebtors(search?: string): Promise<Debtor[]> {
-  let query = supabase.from('debtors').select('*').order('customer_name');
-  if (search) query = query.ilike('customer_name', `%${search}%`);
+export async function fetchDebtors(
+  search?: string
+): Promise<Debtor[]> {
+  let query = supabase
+    .from('debtors')
+    .select('*')
+    .order('customer_name');
+
+  if (search?.trim()) {
+    query = query.ilike(
+      'customer_name',
+      `%${search.trim()}%`
+    );
+  }
 
   const { data, error } = await query;
-  if (error) throw new Error(getFriendlyError(error));
+
+  if (error) {
+    throw new Error(getFriendlyError(error));
+  }
+
   return (data || []) as Debtor[];
 }
 
-export async function fetchDebtorInvoices(customerName: string): Promise<Invoice[]> {
+export async function fetchDebtorInvoices(
+  customerName: string
+): Promise<Invoice[]> {
   const { data, error } = await supabase
     .from('invoices')
-    .select('*')
+    .select(`
+      *,
+      items:invoice_items(*)
+    `)
     .eq('customer_name', customerName)
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error(getFriendlyError(error));
+  if (error) {
+    throw new Error(getFriendlyError(error));
+  }
+
   return (data || []) as Invoice[];
 }
 
@@ -241,10 +387,21 @@ export async function getOutstandingTotal(): Promise<number> {
   const { data, error } = await supabase
     .from('invoices')
     .select('balance')
-    .in('status', ['outstanding', 'partially_paid', 'overdue']);
+    .in('status', [
+      'outstanding',
+      'partially_paid',
+      'overdue',
+    ]);
 
-  if (error) throw new Error(getFriendlyError(error));
-  return (data || []).reduce((sum, i) => sum + Number(i.balance), 0);
+  if (error) {
+    throw new Error(getFriendlyError(error));
+  }
+
+  return (data || []).reduce(
+    (sum, invoice) =>
+      sum + Number(invoice.balance || 0),
+    0
+  );
 }
 
 export type { InvoiceItem, Payment };

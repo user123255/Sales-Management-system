@@ -1,0 +1,29 @@
+:root {
+  --soms-navy: #0A2E24;
+  --soms-emerald: #10B981;
+  --soms-gold: #D6A84F;
+  --soms-background: #F8FAFC;
+
+  --radius-card: 2rem;
+}
+
+
+html {
+  scroll-behavior: smooth;
+}
+
+
+body {
+  margin:0;
+  background:var(--soms-background);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+
+* {
+  box-sizing:border-box;
+}

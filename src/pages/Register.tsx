@@ -148,18 +148,12 @@ export function Register() {
         );
       }
 
-      /*
-       * Supabase email confirmation is enabled.
-       */
       if (!data.session) {
         setEmailConfirmationRequired(true);
         setSuccess(true);
         return;
       }
 
-      /*
-       * Create or update profile.
-       */
       const { error: profileError } =
         await supabase
           .from('profiles')
@@ -234,14 +228,14 @@ export function Register() {
             <div className="mb-7 flex justify-center">
               <div className="flex items-center gap-3">
 
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0A2E24] shadow-lg">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6B1F2A] shadow-lg shadow-[#6B1F2A]/20">
                   <span className="text-xl font-black text-white">
                     S
                   </span>
                 </div>
 
                 <div>
-                  <p className="text-lg font-black tracking-tight text-[#0A2E24]">
+                  <p className="text-lg font-black tracking-tight text-[#6B1F2A]">
                     SOMS
                   </p>
 
@@ -256,11 +250,11 @@ export function Register() {
             {/* Success card */}
             <div className="rounded-[1.75rem] border border-slate-200 bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.07)]">
 
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50">
-                <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B1F2A]/10">
+                <CheckCircle2 className="h-7 w-7 text-[#6B1F2A]" />
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tight text-[#0A2E24]">
+              <h1 className="text-2xl font-bold tracking-tight text-[#6B1F2A]">
                 Account created
               </h1>
 
@@ -278,7 +272,7 @@ export function Register() {
 
                   <Link
                     to="/login"
-                    className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0A2E24] text-sm font-bold text-white shadow-lg transition hover:bg-[#0D3D2F]"
+                    className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#6B1F2A] text-sm font-bold text-white shadow-lg shadow-[#6B1F2A]/20 transition hover:bg-[#541722]"
                   >
                     Go to sign in
                     <ArrowRight className="h-4 w-4" />
@@ -313,7 +307,7 @@ export function Register() {
     <main className="min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900">
 
       {/* Background decoration */}
-      <div className="pointer-events-none fixed -right-40 -top-40 h-96 w-96 rounded-full bg-emerald-500/5 blur-[100px]" />
+      <div className="pointer-events-none fixed -right-40 -top-40 h-96 w-96 rounded-full bg-[#6B1F2A]/5 blur-[100px]" />
 
       <div className="pointer-events-none fixed -bottom-40 -left-40 h-96 w-96 rounded-full bg-[#D6A84F]/5 blur-[100px]" />
 
@@ -328,14 +322,14 @@ export function Register() {
           <div className="mb-6 flex items-center justify-center">
             <div className="flex items-center gap-3">
 
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0A2E24] shadow-lg shadow-emerald-950/10">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#6B1F2A] shadow-lg shadow-[#6B1F2A]/20">
                 <span className="text-lg font-black text-white">
                   S
                 </span>
               </div>
 
               <div>
-                <p className="text-lg font-black tracking-tight text-[#0A2E24]">
+                <p className="text-lg font-black tracking-tight text-[#6B1F2A]">
                   SOMS
                 </p>
 
@@ -357,10 +351,10 @@ export function Register() {
                 REGISTER HEADER
             ================================================== */}
 
-            <div className="relative overflow-hidden bg-[#0A2E24] px-7 py-7 sm:px-9">
+            <div className="relative overflow-hidden bg-[#6B1F2A] px-7 py-7 sm:px-9">
 
               {/* Decorative glow */}
-              <div className="pointer-events-none absolute -right-20 -top-24 h-60 w-60 rounded-full bg-emerald-400/10 blur-3xl" />
+              <div className="pointer-events-none absolute -right-20 -top-24 h-60 w-60 rounded-full bg-white/10 blur-3xl" />
 
               <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-[#D6A84F]/10 blur-3xl" />
 
@@ -400,9 +394,7 @@ export function Register() {
                 className="space-y-5"
               >
 
-                {/* =================================================
-                    NAME + EMAIL
-                ================================================== */}
+                {/* NAME + EMAIL */}
 
                 <div className="grid gap-5 sm:grid-cols-2">
 
@@ -417,7 +409,7 @@ export function Register() {
 
                     <div className="group relative">
 
-                      <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-emerald-500" />
+                      <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
 
                       <input
                         id="fullName"
@@ -431,7 +423,7 @@ export function Register() {
                         placeholder="Your full name"
                         autoComplete="name"
                         disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
                       />
 
                     </div>
@@ -448,7 +440,7 @@ export function Register() {
 
                     <div className="group relative">
 
-                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-emerald-500" />
+                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
 
                       <input
                         id="registerEmail"
@@ -462,7 +454,7 @@ export function Register() {
                         placeholder="you@company.com"
                         autoComplete="email"
                         disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
                       />
 
                     </div>
@@ -470,9 +462,7 @@ export function Register() {
 
                 </div>
 
-                {/* =================================================
-                    DEPARTMENT
-                ================================================== */}
+                {/* DEPARTMENT */}
 
                 <div>
 
@@ -485,7 +475,7 @@ export function Register() {
 
                   <div className="group relative">
 
-                    <Building2 className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-emerald-500" />
+                    <Building2 className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
 
                     <select
                       id="department"
@@ -497,7 +487,7 @@ export function Register() {
                         )
                       }
                       disabled={loading}
-                      className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm font-medium text-slate-900 outline-none transition-all hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm font-medium text-slate-900 outline-none transition-all hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {departments.map(
                         (item) => (
@@ -516,9 +506,7 @@ export function Register() {
                   </div>
                 </div>
 
-                {/* =================================================
-                    OTHER DEPARTMENT
-                ================================================== */}
+                {/* OTHER DEPARTMENT */}
 
                 {department === 'other' && (
                   <div>
@@ -532,7 +520,7 @@ export function Register() {
 
                     <div className="group relative">
 
-                      <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-emerald-500" />
+                      <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
 
                       <input
                         id="otherDepartment"
@@ -546,16 +534,14 @@ export function Register() {
                         placeholder="e.g. Kitchen, Catering, Operations"
                         autoComplete="organization"
                         disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
                       />
 
                     </div>
                   </div>
                 )}
 
-                {/* =================================================
-                    PASSWORDS
-                ================================================== */}
+                {/* PASSWORDS */}
 
                 <div className="grid gap-5 sm:grid-cols-2">
 
@@ -571,7 +557,7 @@ export function Register() {
 
                     <div className="group relative">
 
-                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-emerald-500" />
+                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
 
                       <input
                         id="registerPassword"
@@ -589,7 +575,7 @@ export function Register() {
                         placeholder="Create password"
                         autoComplete="new-password"
                         disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
                       />
 
                       <button
@@ -600,7 +586,7 @@ export function Register() {
                           )
                         }
                         disabled={loading}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-emerald-600"
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-[#6B1F2A]"
                         aria-label={
                           showPassword
                             ? 'Hide password'
@@ -629,7 +615,7 @@ export function Register() {
 
                     <div className="group relative">
 
-                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-emerald-500" />
+                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
 
                       <input
                         id="confirmPassword"
@@ -647,7 +633,7 @@ export function Register() {
                         placeholder="Confirm password"
                         autoComplete="new-password"
                         disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
                       />
 
                       <button
@@ -658,7 +644,7 @@ export function Register() {
                           )
                         }
                         disabled={loading}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-emerald-600"
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-[#6B1F2A]"
                         aria-label={
                           showConfirmPassword
                             ? 'Hide password'
@@ -677,14 +663,12 @@ export function Register() {
 
                 </div>
 
-                {/* =================================================
-                    SUBMIT
-                ================================================== */}
+                {/* SUBMIT */}
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0A2E24] px-5 text-sm font-bold text-white shadow-lg shadow-emerald-950/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0D3D2F] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                  className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#6B1F2A] px-5 text-sm font-bold text-white shadow-lg shadow-[#6B1F2A]/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#541722] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   {loading ? (
                     <>
@@ -701,9 +685,7 @@ export function Register() {
 
               </form>
 
-              {/* =================================================
-                  LOGIN LINK
-              ================================================== */}
+              {/* LOGIN LINK */}
 
               <div className="mt-6 border-t border-slate-100 pt-5 text-center">
 
@@ -713,7 +695,7 @@ export function Register() {
 
                 <Link
                   to="/login"
-                  className="mt-1.5 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 transition hover:text-emerald-500"
+                  className="mt-1.5 inline-flex items-center gap-1 text-sm font-bold text-[#6B1F2A] transition hover:text-[#541722]"
                 >
                   Sign in
                   <ArrowRight className="h-4 w-4" />

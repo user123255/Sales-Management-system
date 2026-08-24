@@ -22,6 +22,7 @@ export function getNavItems(department: Department): NavItem[] {
       return [
         {
           label: 'Dashboard',
+          
           path: '/finance',
           icon: 'LayoutDashboard',
         },

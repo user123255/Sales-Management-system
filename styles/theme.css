@@ -1,0 +1,160 @@
+:root {
+  /* SOMS Brand Colors */
+
+  --soms-primary: #7A1F2B;
+  --soms-primary-dark: #5E1721;
+
+  --soms-gold: #C89B3C;
+  --soms-gold-light: #E6C979;
+
+  --soms-background: #FCFBF9;
+  --soms-surface: #FFFFFF;
+
+  --soms-text: #20252B;
+  --soms-muted: #667085;
+
+  --soms-border: #E7E1D8;
+
+  --soms-success: #198754;
+  --soms-warning: #C89B3C;
+  --soms-danger: #B42318;
+
+  --soms-radius: 14px;
+
+  --soms-shadow:
+    0 20px 60px rgba(32,37,43,0.08);
+}
+
+
+/* Global Reset */
+
+* {
+  box-sizing: border-box;
+}
+
+
+body {
+
+  margin:0;
+
+  background:
+    var(--soms-background);
+
+  color:
+    var(--soms-text);
+
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+}
+
+
+/* Smooth transitions */
+
+button,
+input,
+select,
+textarea {
+
+  transition:
+    all .2s ease;
+
+}
+
+
+
+/* SOMS Card */
+
+.soms-card {
+
+  background:
+    var(--soms-surface);
+
+  border:
+    1px solid var(--soms-border);
+
+  border-radius:
+    var(--soms-radius);
+
+  box-shadow:
+    var(--soms-shadow);
+
+}
+
+
+
+/* Gold line used across system */
+
+.soms-gold-line {
+
+  height:
+    3px;
+
+  width:
+    90px;
+
+  background:
+    var(--soms-gold);
+
+  border-radius:
+    999px;
+
+}
+
+
+
+/* Primary Button */
+
+.soms-button {
+
+  background:
+    var(--soms-primary);
+
+  color:white;
+
+  border-radius:
+    12px;
+
+  font-weight:
+    700;
+
+}
+
+
+.soms-button:hover {
+
+  background:
+    var(--soms-primary-dark);
+
+}
+
+
+
+/* Status badges */
+
+
+.soms-status {
+
+  display:inline-flex;
+
+  align-items:center;
+
+  padding:
+    5px 10px;
+
+  border-radius:
+    999px;
+
+  font-size:
+    12px;
+
+  font-weight:
+    700;
+
+}

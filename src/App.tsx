@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from './lib/auth';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { FinanceDashboard } from './pages/FinanceDashboard';
-import { ButcheryDashboard } from './pages/ButcheryDashboardc';
+import { ButcheryDashboard } from './pages/ButcheryDashboard';
 import { ButcheryOrders } from './pages/ButcheryOrders';
 import { ButcheryOrderDetails } from './pages/ButcheryOrderDetails';
 import { CreateOrder } from './pages/CreateOrder';
@@ -37,7 +37,6 @@ function LoadingScreen() {
     <div className="soms-loading">
       <div className="soms-loading-card">
         <div className="soms-loading-logo">
-          <span>S</span>
         </div>
 
         <div>
@@ -191,7 +190,9 @@ function OtherDepartmentDashboard() {
 
           <div className="soms-empty">
             <div className="soms-empty-icon">🛒</div>
+
             <h3>No orders yet</h3>
+
             <p>
               Create your first departmental order to get started.
             </p>
@@ -308,6 +309,12 @@ function AppRoutes() {
         <Route
           path="/finance/orders"
           element={<Orders />}
+        />
+
+        {/* FIX: Finance order details */}
+        <Route
+          path="/finance/orders/:orderId"
+          element={<ButcheryOrderDetails />}
         />
 
         <Route
@@ -438,6 +445,12 @@ function AppRoutes() {
           element={<Orders />}
         />
 
+        {/* FIX: Other department order details */}
+        <Route
+          path="/other/orders/:orderId"
+          element={<ButcheryOrderDetails />}
+        />
+
         <Route
           path="/other/orders/create"
           element={<CreateOrder />}
@@ -463,9 +476,69 @@ function AppRoutes() {
           element={<Settings />}
         />
 
-        {/* ===================================================
+                {/* ===================================================
             GENERAL
         =================================================== */}
+
+        <Route
+          path="/orders"
+          element={<Orders />}
+        />
+
+        <Route
+          path="/orders/create"
+          element={<CreateOrder />}
+        />
+
+        <Route
+          path="/orders/history"
+          element={<OrderHistory />}
+        />
+
+        <Route
+          path="/orders/:orderId"
+          element={<ButcheryOrderDetails />}
+        />
+
+        <Route
+          path="/receipts"
+          element={<Receipts />}
+        />
+
+        <Route
+          path="/debtors"
+          element={<DebtorAccounts />}
+        />
+
+        <Route
+          path="/invoices"
+          element={<Invoices />}
+        />
+
+        <Route
+          path="/inventory"
+          element={<Inventory />}
+        />
+
+        <Route
+          path="/products"
+          element={<Products />}
+        />
+
+        <Route
+          path="/reports"
+          element={<Reports />}
+        />
+
+        <Route
+          path="/notifications"
+          element={<Notifications />}
+        />
+
+        <Route
+          path="/settings"
+          element={<Settings />}
+        />
 
         <Route
           path="/dashboard"
@@ -476,6 +549,10 @@ function AppRoutes() {
             />
           }
         />
+
+                {/* ===================================================
+            FALLBACK
+        =================================================== */}
 
         <Route
           path="*"

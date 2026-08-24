@@ -1,3 +1,4 @@
+
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -25,7 +26,7 @@ export function Login() {
   const [error, setError] = useState('');
 
   const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
@@ -58,25 +59,27 @@ export function Login() {
 
       if (!data.user) {
         throw new Error(
-          'Unable to sign in. Please try again.'
+          'Unable to sign in. Please try again.',
         );
       }
 
-      const { data: profile, error: profileError } =
-        await supabase
-          .from('profiles')
-          .select('department, role, is_active')
-          .eq('id', data.user.id)
-          .single();
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
+        .from('profiles')
+        .select('department, role, is_active')
+        .eq('id', data.user.id)
+        .single();
 
       if (profileError) {
         console.error(
           'Profile loading error:',
-          profileError
+          profileError,
         );
 
         throw new Error(
-          'Your account was authenticated, but your profile could not be loaded.'
+          'Your account was authenticated, but your profile could not be loaded.',
         );
       }
 
@@ -84,7 +87,7 @@ export function Login() {
         await supabase.auth.signOut();
 
         throw new Error(
-          'Your account is currently inactive. Please contact the system administrator.'
+          'Your account is currently inactive. Please contact the system administrator.',
         );
       }
 
@@ -92,18 +95,18 @@ export function Login() {
 
       if (!department) {
         throw new Error(
-          'Your account does not have a department assigned. Please contact the system administrator.'
+          'Your account does not have a department assigned. Please contact the system administrator.',
         );
       }
 
       if (rememberMe) {
         localStorage.setItem(
           'soms_remember_me',
-          'true'
+          'true',
         );
       } else {
         localStorage.removeItem(
-          'soms_remember_me'
+          'soms_remember_me',
         );
       }
 
@@ -111,7 +114,7 @@ export function Login() {
         getDashboardRoute(department),
         {
           replace: true,
-        }
+        },
       );
     } catch (err) {
       console.error('Login error:', err);
@@ -130,16 +133,15 @@ export function Login() {
         ====================================================== */}
 
         <section className="hidden min-h-screen flex-1 bg-white p-5 lg:flex">
+          <div className="relative flex h-full w-full overflow-hidden rounded-[2rem] bg-[#7A1F2B]">
 
-          <div className="relative flex h-full w-full overflow-hidden rounded-[2rem] bg-[#0A2E24]">
+            {/* Ambient decoration */}
 
-            {/* Ambient glow */}
+            <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-white/10 blur-[100px]" />
 
-            <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-emerald-400/10 blur-[100px]" />
+            <div className="pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-[#D6A84F]/15 blur-[100px]" />
 
-            <div className="pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-[#D6A84F]/10 blur-[100px]" />
-
-            <div className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/5 blur-[100px]" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#9F3A4B]/20 blur-[100px]" />
 
             {/* Subtle pattern */}
 
@@ -147,7 +149,7 @@ export function Login() {
               className="pointer-events-none absolute inset-0 opacity-[0.045]"
               style={{
                 backgroundImage:
-                  'radial-gradient(rgba(107, 5, 5, 0.9) 1px, transparent 1px)',
+                  'radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)',
                 backgroundSize: '28px 28px',
               }}
             />
@@ -160,7 +162,7 @@ export function Login() {
 
               <div className="flex items-center gap-3">
 
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500 shadow-lg shadow-emerald-950/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#D6A84F] shadow-lg shadow-black/20">
                   <span className="text-xl font-black text-white">
                     S
                   </span>
@@ -171,7 +173,7 @@ export function Login() {
                     SOMS
                   </p>
 
-                  <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-emerald-200/60">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-white/65">
                     Sales &amp; Order Management System
                   </p>
                 </div>
@@ -188,12 +190,12 @@ export function Login() {
                   One system.
                   <br />
 
-                  <span className="text-emerald-300">
+                  <span className="text-[#F2D28A]">
                     Every department.
                   </span>
                 </h1>
 
-                <p className="mt-5 max-w-md text-sm leading-6 text-emerald-50/60">
+                <p className="mt-5 max-w-md text-sm leading-6 text-white/65">
                   A simple platform for managing
                   orders, coordinating operations and
                   keeping every department connected.
@@ -205,7 +207,7 @@ export function Login() {
 
               <div className="flex items-end justify-between border-t border-white/10 pt-5">
 
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-300/50">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#F2D28A]/70">
                   Department Operations
                 </p>
 
@@ -216,9 +218,7 @@ export function Login() {
               </div>
 
             </div>
-
           </div>
-
         </section>
 
         {/* =====================================================
@@ -229,7 +229,7 @@ export function Login() {
 
           {/* Background decoration */}
 
-          <div className="pointer-events-none absolute -right-40 -top-40 h-96 w-96 rounded-full bg-emerald-500/5 blur-[100px]" />
+          <div className="pointer-events-none absolute -right-40 -top-40 h-96 w-96 rounded-full bg-[#7A1F2B]/5 blur-[100px]" />
 
           <div className="pointer-events-none absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-[#D6A84F]/5 blur-[100px]" />
 
@@ -241,14 +241,14 @@ export function Login() {
 
               <div className="flex items-center gap-3">
 
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0A2E24] shadow-lg">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B] shadow-lg">
                   <span className="text-xl font-black text-white">
                     S
                   </span>
                 </div>
 
                 <div>
-                  <p className="text-lg font-black tracking-tight text-[#0A2E24]">
+                  <p className="text-lg font-black tracking-tight text-[#7A1F2B]">
                     SOMS
                   </p>
 
@@ -269,9 +269,9 @@ export function Login() {
 
               <div className="mb-7">
 
-                <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+                <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#7A1F2B]/10">
 
-                  <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
+                  <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#7A1F2B]" />
 
                 </div>
 
@@ -313,7 +313,7 @@ export function Login() {
 
                   <div className="group relative">
 
-                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-emerald-500" />
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-[#7A1F2B]" />
 
                     <input
                       id="email"
@@ -325,7 +325,7 @@ export function Login() {
                       placeholder="you@company.com"
                       autoComplete="email"
                       disabled={loading}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#7A1F2B] focus:bg-white focus:ring-4 focus:ring-[#7A1F2B]/10 disabled:cursor-not-allowed disabled:opacity-60"
                     />
 
                   </div>
@@ -345,7 +345,7 @@ export function Login() {
 
                   <div className="group relative">
 
-                    <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-emerald-500" />
+                    <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-[#7A1F2B]" />
 
                     <input
                       id="password"
@@ -361,18 +361,18 @@ export function Login() {
                       placeholder="Enter your password"
                       autoComplete="current-password"
                       disabled={loading}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#7A1F2B] focus:bg-white focus:ring-4 focus:ring-[#7A1F2B]/10 disabled:cursor-not-allowed disabled:opacity-60"
                     />
 
                     <button
                       type="button"
                       onClick={() =>
                         setShowPassword(
-                          (value) => !value
+                          (value) => !value,
                         )
                       }
                       disabled={loading}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-emerald-600 disabled:cursor-not-allowed"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-[#7A1F2B] disabled:cursor-not-allowed"
                       aria-label={
                         showPassword
                           ? 'Hide password'
@@ -401,11 +401,11 @@ export function Login() {
                       checked={rememberMe}
                       onChange={(event) =>
                         setRememberMe(
-                          event.target.checked
+                          event.target.checked,
                         )
                       }
                       disabled={loading}
-                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      className="h-4 w-4 rounded border-slate-300 text-[#7A1F2B] focus:ring-[#7A1F2B]"
                     />
 
                     <span className="text-xs font-medium text-slate-500">
@@ -416,7 +416,7 @@ export function Login() {
 
                   <Link
                     to="/auth/forgotpassword"
-                    className="text-xs font-bold text-emerald-600 transition hover:text-emerald-500"
+                    className="text-xs font-bold text-[#7A1F2B] transition hover:text-[#5F1822]"
                   >
                     Forgot password?
                   </Link>
@@ -428,7 +428,7 @@ export function Login() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0A2E24] px-5 text-sm font-bold text-white shadow-lg shadow-emerald-950/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0D3D2F] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                  className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#7A1F2B] px-5 text-sm font-bold text-white shadow-lg shadow-[#7A1F2B]/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5F1822] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   {loading ? (
                     <>
@@ -455,7 +455,7 @@ export function Login() {
 
                 <Link
                   to="/register"
-                  className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 transition hover:text-emerald-500"
+                  className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-[#7A1F2B] transition hover:text-[#5F1822]"
                 >
                   Create account
                   <ArrowRight className="h-4 w-4" />
@@ -479,3 +479,6 @@ export function Login() {
     </main>
   );
 }
+
+export default Login;
+

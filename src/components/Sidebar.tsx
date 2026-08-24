@@ -22,8 +22,8 @@ import type { Department } from '../types/database';
 interface SidebarProps {
   department: Department;
   collapsed: boolean;
-  mobileOpen: boolean;
-  onCloseMobile: () => void;
+  mobileOpen?: boolean;
+  onClose?: () => void;
   onToggle: () => void;
   onLogout: () => Promise<void>;
 }
@@ -31,11 +31,20 @@ interface SidebarProps {
 interface NavigationItem {
   label: string;
   path: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
   description?: string;
 }
 
-const navigation: Record<Department, NavigationItem[]> = {
+/* =========================================================
+   SOMS NAVIGATION
+========================================================= */
+
+const navigation: Record<
+  Department,
+  NavigationItem[]
+> = {
   finance: [
     {
       label: 'Dashboard',
@@ -196,12 +205,18 @@ const navigation: Record<Department, NavigationItem[]> = {
   ],
 };
 
+/* =========================================================
+   DEPARTMENT INFORMATION
+========================================================= */
+
 const departmentInfo: Record<
   Department,
   {
     name: string;
     shortName: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: React.ComponentType<{
+      className?: string;
+    }>;
   }
 > = {
   finance: {
@@ -209,11 +224,13 @@ const departmentInfo: Record<
     shortName: 'Finance',
     icon: BarChart3,
   },
+
   butchery: {
     name: 'Butchery Department',
     shortName: 'Butchery',
     icon: Package,
   },
+
   other: {
     name: 'Operations',
     shortName: 'Operations',
@@ -221,97 +238,287 @@ const departmentInfo: Record<
   },
 };
 
+/* =========================================================
+   SIDEBAR
+========================================================= */
+
 export function Sidebar({
   department,
   collapsed,
-  mobileOpen,
-  onCloseMobile,
+  mobileOpen = false,
+  onClose,
   onToggle,
   onLogout,
 }: SidebarProps) {
-  const items = navigation[department] ?? [];
-  const info = departmentInfo[department];
-  const DepartmentIcon = info.icon;
+  const items =
+    navigation[department] ?? [];
+
+  const info =
+    departmentInfo[department];
+
+  const DepartmentIcon =
+    info.icon;
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* =====================================================
+          MOBILE BACKDROP
+      ===================================================== */}
+
       {mobileOpen && (
         <button
           type="button"
           aria-label="Close navigation"
-          onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm lg:hidden"
+          onClick={onClose}
+          className="
+            fixed inset-0 z-40
+            bg-slate-950/60
+            backdrop-blur-sm
+            lg:hidden
+          "
         />
       )}
 
+      {/* =====================================================
+          SIDEBAR
+      ===================================================== */}
+
       <aside
         className={`
-          fixed left-0 top-0 z-50 flex h-screen flex-col
-          border-r border-slate-200/80 bg-white
-          shadow-[8px_0_30px_rgba(15,23,42,0.04)]
-          transition-all duration-300 ease-out
-          ${collapsed ? 'w-[82px]' : 'w-[280px]'}
+          fixed
+          left-0
+          top-0
+          z-50
+          flex
+          h-screen
+          flex-col
+
+          border-r
+          border-slate-200
+
+          bg-white
+
+          shadow-[8px_0_30px_rgba(15,23,42,0.06)]
+
+          transition-all
+          duration-300
+          ease-in-out
+
+          ${
+            collapsed
+              ? 'w-[82px]'
+              : 'w-[280px]'
+          }
+
           ${
             mobileOpen
               ? 'translate-x-0'
               : '-translate-x-full lg:translate-x-0'
           }
+
+          dark:border-slate-800
+          dark:bg-slate-950
         `}
       >
-        {/* Brand */}
+        {/* =================================================
+            BRAND
+        ================================================= */}
+
         <div
           className={`
-            flex h-[78px] items-center border-b border-slate-100
-            ${collapsed ? 'justify-center px-3' : 'px-5'}
+            flex
+            h-[78px]
+            shrink-0
+            items-center
+
+            border-b
+            border-slate-100
+
+            dark:border-slate-800
+
+            ${
+              collapsed
+                ? 'justify-center px-3'
+                : 'px-5'
+            }
           `}
         >
           <div className="flex min-w-0 items-center gap-3">
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 shadow-lg shadow-blue-600/20">
-              <ShoppingCart className="h-5 w-5 text-white" />
+            {/* Logo */}
+
+            <div
+              className="
+                flex
+                h-11
+                w-11
+                shrink-0
+                items-center
+                justify-center
+                rounded-2xl
+
+                bg-gradient-to-br
+                from-[#7f1d1d]
+                via-[#991b1b]
+                to-[#b91c1c]
+
+                shadow-lg
+                shadow-red-900/20
+              "
+            >
+              <ShoppingCart
+                className="
+                  h-5
+                  w-5
+                  text-white
+                "
+              />
             </div>
 
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="truncate text-[15px] font-extrabold tracking-tight text-slate-900">
+                <h1
+                  className="
+                    truncate
+                    text-[15px]
+                    font-extrabold
+                    tracking-tight
+                    text-slate-900
+                    dark:text-white
+                  "
+                >
                   SOMS
                 </h1>
-                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+
+                <p
+                  className="
+                    truncate
+                    text-[10px]
+                    font-semibold
+                    uppercase
+                    tracking-[0.16em]
+                    text-slate-400
+                  "
+                >
                   Sales Management
                 </p>
               </div>
             )}
           </div>
 
+          {/* Mobile close */}
+
           <button
             type="button"
-            onClick={onCloseMobile}
-            className="ml-auto rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+            onClick={onClose}
+            className="
+              ml-auto
+              rounded-lg
+              p-2
+
+              text-slate-400
+
+              transition
+
+              hover:bg-slate-100
+              hover:text-slate-700
+
+              dark:hover:bg-slate-800
+              dark:hover:text-white
+
+              lg:hidden
+            "
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Department identity */}
-        <div className={`${collapsed ? 'px-3' : 'px-4'} pt-5`}>
+        {/* =================================================
+            DEPARTMENT CARD
+        ================================================= */}
+
+        <div
+          className={`
+            ${
+              collapsed
+                ? 'px-3'
+                : 'px-4'
+            }
+            pt-5
+          `}
+        >
           <div
             className={`
-              flex items-center rounded-2xl border border-blue-100
-              bg-gradient-to-br from-blue-50 to-indigo-50
-              ${collapsed ? 'justify-center p-3' : 'gap-3 p-3'}
+              flex
+              items-center
+              rounded-2xl
+
+              border
+              border-red-100
+
+              bg-red-50
+
+              dark:border-red-950
+              dark:bg-red-950/30
+
+              ${
+                collapsed
+                  ? 'justify-center p-3'
+                  : 'gap-3 p-3'
+              }
             `}
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
-              <DepartmentIcon className="h-5 w-5" />
+            <div
+              className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                rounded-xl
+
+                bg-white
+
+                text-[#991b1b]
+
+                shadow-sm
+
+                dark:bg-slate-900
+                dark:text-red-400
+              "
+            >
+              <DepartmentIcon
+                className="h-5 w-5"
+              />
             </div>
 
             {!collapsed && (
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500">
+                <p
+                  className="
+                    text-[10px]
+                    font-bold
+                    uppercase
+                    tracking-wider
+                    text-[#991b1b]
+
+                    dark:text-red-400
+                  "
+                >
                   Department
                 </p>
-                <p className="truncate text-sm font-bold text-slate-800">
+
+                <p
+                  className="
+                    truncate
+                    text-sm
+                    font-bold
+                    text-slate-800
+
+                    dark:text-slate-100
+                  "
+                >
                   {info.name}
                 </p>
               </div>
@@ -319,75 +526,174 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-5">
+        {/* =================================================
+            NAVIGATION
+        ================================================= */}
+
+        <nav
+          className="
+            flex-1
+            overflow-y-auto
+            px-3
+            py-5
+          "
+        >
           {!collapsed && (
-            <p className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+            <p
+              className="
+                mb-3
+                px-2
+                text-[10px]
+                font-bold
+                uppercase
+                tracking-[0.16em]
+                text-slate-400
+              "
+            >
               Workspace
             </p>
           )}
 
           <div className="space-y-1">
             {items.map((item) => {
-              const Icon = item.icon;
+              const Icon =
+                item.icon;
 
               return (
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  onClick={onCloseMobile}
-                  title={collapsed ? item.label : undefined}
-                  className={({ isActive }) =>
+                  onClick={onClose}
+                  title={
+                    collapsed
+                      ? item.label
+                      : undefined
+                  }
+                  className={({
+                    isActive,
+                  }) =>
                     `
-                    group relative flex items-center rounded-xl
-                    transition-all duration-200
+                    group
+                    relative
+                    flex
+                    items-center
+                    rounded-xl
+
+                    transition-all
+                    duration-200
+
                     ${
                       collapsed
                         ? 'justify-center px-3 py-3'
                         : 'gap-3 px-3 py-2.5'
                     }
+
                     ${
                       isActive
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        ? `
+                          bg-[#991b1b]
+                          text-white
+                          shadow-md
+                          shadow-red-900/20
+                        `
+                        : `
+                          text-slate-600
+                          hover:bg-red-50
+                          hover:text-[#991b1b]
+
+                          dark:text-slate-300
+                          dark:hover:bg-red-950/30
+                          dark:hover:text-red-400
+                        `
                     }
                     `
                   }
                 >
-                  {({ isActive }) => (
+                  {({
+                    isActive,
+                  }) => (
                     <>
+                      {/* Active indicator */}
+
                       {isActive && (
-                        <span className="absolute left-0 h-6 w-1 rounded-r-full bg-white" />
+                        <span
+                          className="
+                            absolute
+                            left-0
+                            h-6
+                            w-1
+                            rounded-r-full
+                            bg-white
+                          "
+                        />
                       )}
 
                       <Icon
                         className={`
-                          h-[19px] w-[19px] shrink-0
-                          transition-transform duration-200
+                          h-[19px]
+                          w-[19px]
+                          shrink-0
+
+                          transition-transform
+                          duration-200
+
                           group-hover:scale-105
+
                           ${
                             isActive
                               ? 'text-white'
-                              : 'text-slate-400 group-hover:text-blue-600'
+                              : `
+                                text-slate-400
+                                group-hover:text-[#991b1b]
+
+                                dark:text-slate-500
+                                dark:group-hover:text-red-400
+                              `
                           }
                         `}
                       />
 
                       {!collapsed && (
-                        <div className="min-w-0 flex-1">
+                        <div
+                          className="
+                            min-w-0
+                            flex-1
+                          "
+                        >
                           <p
-                            className={`truncate text-[13px] font-semibold ${
-                              isActive ? 'text-white' : 'text-slate-700'
-                            }`}
+                            className={`
+                              truncate
+                              text-[13px]
+                              font-semibold
+
+                              ${
+                                isActive
+                                  ? 'text-white'
+                                  : `
+                                    text-slate-700
+                                    dark:text-slate-200
+                                  `
+                              }
+                            `}
                           >
                             {item.label}
                           </p>
 
-                          {item.description && !isActive && (
-                            <p className="truncate text-[10px] text-slate-400">
-                              {item.description}
-                            </p>
-                          )}
+                          {item.description &&
+                            !isActive && (
+                              <p
+                                className="
+                                  truncate
+                                  text-[10px]
+                                  text-slate-400
+                                  dark:text-slate-500
+                                "
+                              >
+                                {
+                                  item.description
+                                }
+                              </p>
+                            )}
                         </div>
                       )}
                     </>
@@ -398,44 +704,136 @@ export function Sidebar({
           </div>
         </nav>
 
-        {/* Bottom controls */}
-        <div className="border-t border-slate-100 p-3">
+        {/* =================================================
+            BOTTOM CONTROLS
+        ================================================= */}
+
+        <div
+          className="
+            shrink-0
+            border-t
+            border-slate-100
+            p-3
+
+            dark:border-slate-800
+          "
+        >
+          {/* Collapse / Expand */}
+
           <button
             type="button"
             onClick={onToggle}
             className={`
-              mb-2 hidden w-full items-center rounded-xl
-              text-slate-500 transition hover:bg-slate-50 hover:text-slate-900
+              mb-2
+              hidden
+              w-full
+              items-center
+              rounded-xl
+
+              text-slate-500
+
+              transition-all
+
+              hover:bg-red-50
+              hover:text-[#991b1b]
+
+              dark:hover:bg-red-950/30
+              dark:hover:text-red-400
+
               lg:flex
-              ${collapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2.5'}
+
+              ${
+                collapsed
+                  ? 'justify-center p-3'
+                  : 'gap-3 px-3 py-2.5'
+              }
             `}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={
+              collapsed
+                ? 'Expand sidebar'
+                : 'Collapse sidebar'
+            }
+            aria-label={
+              collapsed
+                ? 'Expand sidebar'
+                : 'Collapse sidebar'
+            }
           >
             {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight
+                className="h-4 w-4"
+              />
             ) : (
               <>
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-xs font-semibold">Collapse menu</span>
+                <ChevronLeft
+                  className="h-4 w-4"
+                />
+
+                <span
+                  className="
+                    text-xs
+                    font-semibold
+                  "
+                >
+                  Collapse menu
+                </span>
               </>
             )}
           </button>
 
+          {/* Sign out */}
+
           <button
             type="button"
-            onClick={onLogout}
+            onClick={() => {
+              void onLogout();
+            }}
             className={`
-              flex w-full items-center rounded-xl
-              text-red-500 transition-all duration-200
-              hover:bg-red-50 hover:text-red-600
-              ${collapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2.5'}
+              flex
+              w-full
+              items-center
+              rounded-xl
+
+              text-red-600
+
+              transition-all
+              duration-200
+
+              hover:bg-red-50
+              hover:text-red-700
+
+              dark:text-red-400
+              dark:hover:bg-red-950/40
+              dark:hover:text-red-300
+
+              ${
+                collapsed
+                  ? 'justify-center p-3'
+                  : 'gap-3 px-3 py-2.5'
+              }
             `}
-            title={collapsed ? 'Sign out' : undefined}
+            title={
+              collapsed
+                ? 'Sign out'
+                : undefined
+            }
+            aria-label="Sign out"
           >
-            <LogOut className="h-[19px] w-[19px] shrink-0" />
+            <LogOut
+              className="
+                h-[19px]
+                w-[19px]
+                shrink-0
+              "
+            />
 
             {!collapsed && (
-              <span className="text-xs font-bold">
+              <span
+                className="
+                  text-xs
+                  font-bold
+                "
+              >
                 Sign out
               </span>
             )}
@@ -445,3 +843,5 @@ export function Sidebar({
     </>
   );
 }
+
+export default Sidebar;
