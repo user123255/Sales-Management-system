@@ -332,6 +332,17 @@ export interface DepartmentActivity {
   total_sales: number;
 }
 
+export interface InventoryItem {
+  id: string;
+  inventory_number: string;
+  product_id: string;
+  quantity: number;
+  unit: string;
+  low_stock_threshold: number;
+  updated_at: string;
+  product?: Product;
+}
+
 export const ORDER_STATUSES: OrderStatus[] = [
   'pending',
   'accepted',

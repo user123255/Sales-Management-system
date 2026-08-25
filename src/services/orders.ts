@@ -14,6 +14,7 @@ import type {
 
 import { calculateOrderTotal } from '../lib/utils';
 
+
 /* =========================================================
    TYPES
 ========================================================= */
@@ -30,6 +31,7 @@ type OrderRealtimeDeleteCallback = (
   orderId: string
 ) => void;
 
+
 /* =========================================================
    CONSTANTS
 ========================================================= */
@@ -43,17 +45,6 @@ const ORDER_STATUSES: OrderStatus[] = [
   'cancelled',
 ];
 
-const STATUS_TRANSITIONS: Record<
-  OrderStatus,
-  OrderStatus[]
-> = {
-  pending: ['accepted', 'cancelled'],
-  accepted: ['processing', 'cancelled'],
-  processing: ['ready', 'cancelled'],
-  ready: ['completed', 'cancelled'],
-  completed: [],
-  cancelled: [],
-};
 
 /* =========================================================
    HELPERS
@@ -70,56 +61,48 @@ function isOrderStatus(
   );
 }
 
-function statusLabel(
-  status: OrderStatus
-): string {
-  return (
-    status.charAt(0).toUpperCase() +
-    status.slice(1)
-  );
-}
 
 function cleanSearchValue(
   value: string
 ): string {
   return value
     .trim()
-    .replace(/[%_,]/g, ' ')
-    .replace(/\s+/g, ' ');
+    .replace(
+      /[%_,]/g,
+      ' '
+    )
+    .replace(
+      /\s+/g,
+      ' '
+    );
 }
 
-function isValidQuantity(
-  value: number
-): boolean {
-  return (
-    Number.isFinite(value) &&
-    value >= 0
-  );
-}
 
-/**
- * Load a complete order including:
- * - creator
- * - items
- * - item responders
- * - status history
- * - status changers
- */
+/* =========================================================
+   FETCH COMPLETE ORDER
+========================================================= */
+
 async function fetchCompleteOrder(
   orderId: string
 ): Promise<Order | null> {
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('orders')
     .select(`
       *,
+
       creator:profiles!orders_created_by_fkey(
         id,
         full_name,
         email,
         department
       ),
+
       items:order_items(
         *,
+
         responder:profiles!order_items_responded_by_fkey(
           id,
           full_name,
@@ -127,8 +110,10 @@ async function fetchCompleteOrder(
           department
         )
       ),
+
       status_history:order_status_history(
         *,
+
         changer:profiles!order_status_history_changed_by_fkey(
           id,
           full_name,
@@ -136,8 +121,12 @@ async function fetchCompleteOrder(
         )
       )
     `)
-    .eq('id', orderId)
+    .eq(
+      'id',
+      orderId
+    )
     .maybeSingle();
+
 
   if (error) {
     throw new Error(
@@ -145,11 +134,15 @@ async function fetchCompleteOrder(
     );
   }
 
+
   if (!data) {
     return null;
   }
 
-  const order = data as Order;
+
+  const order =
+    data as Order;
+
 
   if (order.status_history) {
     order.status_history =
@@ -166,8 +159,10 @@ async function fetchCompleteOrder(
         );
   }
 
+
   return order;
 }
+
 
 /* =========================================================
    FETCH ORDERS
@@ -176,42 +171,55 @@ async function fetchCompleteOrder(
 export async function fetchOrders(
   filters?: FetchOrdersFilters
 ): Promise<Order[]> {
-  let query = supabase
-    .from('orders')
-    .select(`
-      *,
-      creator:profiles!orders_created_by_fkey(
-        id,
-        full_name,
-        email,
-        department
-      ),
-      items:order_items(*)
-    `)
-    .order('created_at', {
-      ascending: false,
-    });
+  let query =
+    supabase
+      .from('orders')
+      .select(`
+        *,
+
+        creator:profiles!orders_created_by_fkey(
+          id,
+          full_name,
+          email,
+          department
+        ),
+
+        items:order_items(*)
+      `)
+      .order(
+        'created_at',
+        {
+          ascending: false,
+        }
+      );
+
 
   if (filters?.status) {
-    query = query.eq(
-      'status',
-      filters.status
-    );
+    query =
+      query.eq(
+        'status',
+        filters.status
+      );
   }
+
 
   if (filters?.department) {
-    query = query.eq(
-      'department',
-      filters.department
-    );
+    query =
+      query.eq(
+        'department',
+        filters.department
+      );
   }
 
+
   if (filters?.dateFrom) {
-    query = query.gte(
-      'created_at',
-      filters.dateFrom
-    );
+    query =
+      query.gte(
+        'created_at',
+        filters.dateFrom
+      );
   }
+
 
   if (filters?.dateTo) {
     const dateTo =
@@ -219,11 +227,13 @@ export async function fetchOrders(
         ? filters.dateTo
         : `${filters.dateTo}T23:59:59`;
 
-    query = query.lte(
-      'created_at',
-      dateTo
-    );
+    query =
+      query.lte(
+        'created_at',
+        dateTo
+      );
   }
+
 
   if (filters?.search?.trim()) {
     const search =
@@ -231,21 +241,23 @@ export async function fetchOrders(
         filters.search
       );
 
-    if (search) {
-      query = query.or(
+    query =
+      query.or(
         [
           `order_number.ilike.%${search}%`,
           `customer_name.ilike.%${search}%`,
           `department.ilike.%${search}%`,
         ].join(',')
       );
-    }
   }
+
 
   const {
     data,
     error,
-  } = await query;
+  } =
+    await query;
+
 
   if (error) {
     throw new Error(
@@ -253,8 +265,12 @@ export async function fetchOrders(
     );
   }
 
-  return (data || []) as Order[];
+
+  return (
+    data || []
+  ) as Order[];
 }
+
 
 /* =========================================================
    FETCH SINGLE ORDER
@@ -267,10 +283,12 @@ export async function fetchOrderById(
     return null;
   }
 
+
   return fetchCompleteOrder(
     id.trim()
   );
 }
+
 
 /* =========================================================
    FETCH ORDER BY NUMBER
@@ -279,47 +297,39 @@ export async function fetchOrderById(
 export async function fetchOrderByNumber(
   orderNumber: string
 ): Promise<Order | null> {
-  const cleanedNumber =
-    orderNumber.trim();
-
-  if (!cleanedNumber) {
+  if (!orderNumber?.trim()) {
     return null;
   }
 
-  const { data, error } =
+
+  const {
+    data,
+    error,
+  } =
     await supabase
       .from('orders')
       .select(`
         *,
+
         creator:profiles!orders_created_by_fkey(
           id,
           full_name,
           email,
           department
         ),
-        items:order_items(
-          *,
-          responder:profiles!order_items_responded_by_fkey(
-            id,
-            full_name,
-            email,
-            department
-          )
-        ),
+
+        items:order_items(*),
+
         status_history:order_status_history(
-          *,
-          changer:profiles!order_status_history_changed_by_fkey(
-            id,
-            full_name,
-            department
-          )
+          *
         )
       `)
       .eq(
         'order_number',
-        cleanedNumber
+        orderNumber.trim()
       )
       .maybeSingle();
+
 
   if (error) {
     throw new Error(
@@ -327,29 +337,413 @@ export async function fetchOrderByNumber(
     );
   }
 
-  if (!data) {
-    return null;
-  }
 
-  const order = data as Order;
-
-  if (order.status_history) {
-    order.status_history =
-      order.status_history
-        .slice()
-        .sort(
-          (a, b) =>
-            new Date(
-              a.created_at
-            ).getTime() -
-            new Date(
-              b.created_at
-            ).getTime()
-        );
-  }
-
-  return order;
+  return (
+    data as Order
+  ) || null;
 }
+
+
+/* =========================================================
+   DELETE ORDER
+   NO APPLICATION-LEVEL RESTRICTIONS
+========================================================= */
+
+export async function deleteOrder(
+  orderId: string
+): Promise<void> {
+  if (!orderId?.trim()) {
+    throw new Error(
+      'Order ID is required.'
+    );
+  }
+
+
+  const id =
+    orderId.trim();
+
+
+  /*
+   * Delete dependent records first.
+   */
+
+  const notificationResult =
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq(
+        'order_id',
+        id
+      );
+
+
+  if (notificationResult.error) {
+    throw new Error(
+      getFriendlyError(
+        notificationResult.error
+      )
+    );
+  }
+
+
+  const historyResult =
+    await supabase
+      .from('order_status_history')
+      .delete()
+      .eq(
+        'order_id',
+        id
+      );
+
+
+  if (historyResult.error) {
+    throw new Error(
+      getFriendlyError(
+        historyResult.error
+      )
+    );
+  }
+
+
+  const itemsResult =
+    await supabase
+      .from('order_items')
+      .delete()
+      .eq(
+        'order_id',
+        id
+      );
+
+
+  if (itemsResult.error) {
+    throw new Error(
+      getFriendlyError(
+        itemsResult.error
+      )
+    );
+  }
+
+
+  /*
+   * Finally delete the order itself.
+   */
+
+  const {
+    error,
+  } =
+    await supabase
+      .from('orders')
+      .delete()
+      .eq(
+        'id',
+        id
+      );
+
+
+  if (error) {
+    throw new Error(
+      getFriendlyError(error)
+    );
+  }
+}
+
+
+/* =========================================================
+   UPDATE ORDER
+========================================================= */
+
+export async function updateOrder(
+  orderId: string,
+  input: CreateOrderInput
+): Promise<Order> {
+  if (!orderId?.trim()) {
+    throw new Error(
+      'Order ID is required.'
+    );
+  }
+
+
+  if (
+    !input?.items ||
+    input.items.length === 0
+  ) {
+    throw new Error(
+      'Order must contain at least one item.'
+    );
+  }
+
+
+  /*
+   * Validate items.
+   */
+
+  for (const item of input.items) {
+    if (!item.product_name?.trim()) {
+      throw new Error(
+        'Product name is required.'
+      );
+    }
+
+
+    if (
+      !Number.isFinite(
+        Number(item.quantity)
+      ) ||
+      Number(item.quantity) <= 0
+    ) {
+      throw new Error(
+        `Invalid quantity for ${item.product_name}`
+      );
+    }
+
+
+    if (
+      !Number.isFinite(
+        Number(item.price)
+      ) ||
+      Number(item.price) < 0
+    ) {
+      throw new Error(
+        `Invalid price for ${item.product_name}`
+      );
+    }
+  }
+
+
+  const subtotal =
+    calculateOrderTotal(
+      input.items
+    );
+
+
+  /*
+   * Update main order.
+   */
+
+  const {
+    error: updateError,
+  } =
+    await supabase
+      .from('orders')
+      .update({
+        notes:
+          input.notes?.trim() ||
+          null,
+
+        customer_name:
+          input.customer_name?.trim() ||
+          null,
+
+        delivery_info:
+          input.delivery_info?.trim() ||
+          null,
+
+        subtotal,
+
+        total:
+          subtotal,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        'id',
+        orderId
+      );
+
+
+  if (updateError) {
+    throw new Error(
+      getFriendlyError(
+        updateError
+      )
+    );
+  }
+
+
+  /*
+   * Get existing items before replacing them.
+   *
+   * This allows us to preserve Butchery response
+   * information when the same item is edited.
+   */
+
+  const {
+    data: existingItems,
+    error: existingItemsError,
+  } =
+    await supabase
+      .from('order_items')
+      .select('*')
+      .eq(
+        'order_id',
+        orderId
+      );
+
+
+  if (existingItemsError) {
+    throw new Error(
+      getFriendlyError(
+        existingItemsError
+      )
+    );
+  }
+
+
+  /*
+   * Delete old items.
+   */
+
+  const {
+    error: deleteItemsError,
+  } =
+    await supabase
+      .from('order_items')
+      .delete()
+      .eq(
+        'order_id',
+        orderId
+      );
+
+
+  if (deleteItemsError) {
+    throw new Error(
+      getFriendlyError(
+        deleteItemsError
+      )
+    );
+  }
+
+
+  /*
+   * Recreate items.
+   */
+
+  const updatedItems =
+    input.items.map(
+      (item) => {
+        /*
+         * Try to find the previous item by
+         * product name.
+         */
+
+        const previous =
+          existingItems?.find(
+            (existing) =>
+              existing.product_name
+                ?.trim()
+                .toLowerCase() ===
+              item.product_name
+                .trim()
+                .toLowerCase()
+          );
+
+
+        return {
+          order_id:
+            orderId,
+
+          product_id:
+            item.product_id ||
+            null,
+
+          product_name:
+            item.product_name.trim(),
+
+          quantity:
+            Number(
+              item.quantity
+            ),
+
+          unit:
+            item.unit ||
+            null,
+
+          price:
+            Number(
+              item.price
+            ),
+
+          packaging:
+            item.packaging?.trim() ||
+            null,
+
+          notes:
+            item.notes?.trim() ||
+            null,
+
+          /*
+           * Preserve existing Butchery information
+           * whenever the product still exists.
+           */
+
+          available_quantity:
+            previous?.available_quantity ??
+            null,
+
+          accepted_quantity:
+            previous?.accepted_quantity ??
+            null,
+
+          response_status:
+            previous?.response_status ??
+            'pending',
+
+          butchery_note:
+            previous?.butchery_note ??
+            null,
+
+          responded_at:
+            previous?.responded_at ??
+            null,
+
+          responded_by:
+            previous?.responded_by ??
+            null,
+        };
+      }
+    );
+
+
+  const {
+    error: itemError,
+  } =
+    await supabase
+      .from('order_items')
+      .insert(
+        updatedItems
+      );
+
+
+  if (itemError) {
+    throw new Error(
+      getFriendlyError(
+        itemError
+      )
+    );
+  }
+
+
+  /*
+   * Return complete updated order.
+   */
+
+  const updatedOrder =
+    await fetchOrderById(
+      orderId
+    );
+
+
+  if (!updatedOrder) {
+    throw new Error(
+      'Order updated but could not be loaded.'
+    );
+  }
+
+
+  return updatedOrder;
+}
+
 
 /* =========================================================
    CREATE ORDER
@@ -362,188 +756,180 @@ export async function createOrder(
 ): Promise<Order> {
   if (!userId) {
     throw new Error(
-      'You must be signed in to create an order.'
+      'You must login first.'
     );
   }
 
+
   if (!department?.trim()) {
     throw new Error(
-      'A department is required.'
+      'Department is required.'
     );
   }
+
 
   if (
     !input?.items ||
     input.items.length === 0
   ) {
     throw new Error(
-      'Please add at least one item to the order.'
+      'Order must contain at least one item.'
     );
   }
 
-  for (const item of input.items) {
-    if (
-      !item.product_name?.trim()
-    ) {
-      throw new Error(
-        'Every order item must have a product name.'
-      );
-    }
-
-    if (
-      !Number.isFinite(
-        Number(item.quantity)
-      ) ||
-      Number(item.quantity) <= 0
-    ) {
-      throw new Error(
-        `Quantity for ${item.product_name} must be greater than zero.`
-      );
-    }
-
-    if (
-      !Number.isFinite(
-        Number(item.price)
-      ) ||
-      Number(item.price) < 0
-    ) {
-      throw new Error(
-        `Price for ${item.product_name} cannot be negative.`
-      );
-    }
-  }
 
   const subtotal =
     calculateOrderTotal(
       input.items
     );
 
-  /* -------------------------------------------------------
-     Generate order number
-  ------------------------------------------------------- */
+
+  /*
+   * Generate order number.
+   */
 
   const {
-    data: generatedOrderNumber,
+    data: numberData,
     error: numberError,
   } =
     await supabase.rpc(
       'generate_order_number'
     );
 
-  let orderNumber: string;
 
-  if (
-    !numberError &&
-    generatedOrderNumber
-  ) {
-    orderNumber =
-      String(
-        generatedOrderNumber
-      );
-  } else {
-    const today =
-      new Date()
-        .toISOString()
-        .slice(0, 10)
-        .replace(/-/g, '');
-
-    orderNumber =
-      `SOMS-${today}-${Date.now()
-        .toString()
-        .slice(-6)}`;
+  if (numberError) {
+    console.warn(
+      'Could not generate order number:',
+      numberError
+    );
   }
 
-  /* -------------------------------------------------------
-     Create parent order
-  ------------------------------------------------------- */
+
+  const orderNumber =
+    numberData ||
+    `SOMS-${Date.now()}`;
+
+
+  /*
+   * Create order.
+   */
 
   const {
     data: order,
-    error: orderError,
-  } = await supabase
-    .from('orders')
-    .insert({
-      order_number: orderNumber,
-      created_by: userId,
-      department:
-        department.trim(),
-      status: 'pending',
-      notes:
-        input.notes?.trim() ||
-        null,
-      customer_name:
-        input.customer_name?.trim() ||
-        null,
-      delivery_info:
-        input.delivery_info?.trim() ||
-        null,
-      subtotal,
-      total: subtotal,
-    })
-    .select()
-    .single();
+    error,
+  } =
+    await supabase
+      .from('orders')
+      .insert({
+        order_number:
+          orderNumber,
 
-  if (orderError || !order) {
+        created_by:
+          userId,
+
+        department:
+          department.trim(),
+
+        status:
+          'pending',
+
+        notes:
+          input.notes?.trim() ||
+          null,
+
+        customer_name:
+          input.customer_name?.trim() ||
+          null,
+
+        delivery_info:
+          input.delivery_info?.trim() ||
+          null,
+
+        subtotal,
+
+        total:
+          subtotal,
+      })
+      .select()
+      .single();
+
+
+  if (error || !order) {
     throw new Error(
       getFriendlyError(
-        orderError ||
-          new Error(
-            'Unable to create order.'
-          )
+        error
       )
     );
   }
 
-  /* -------------------------------------------------------
-     Create order items
-  ------------------------------------------------------- */
 
-  const orderItems =
-    input.items.map((item) => ({
-      order_id: order.id,
-      product_id:
-        item.product_id || null,
-      product_name:
-        item.product_name.trim(),
-      quantity:
-        Number(item.quantity),
-      unit:
-        item.unit || null,
-      price:
-        Number(item.price),
-      packaging:
-        item.packaging?.trim() ||
-        null,
-      notes:
-        item.notes?.trim() ||
-        null,
+  /*
+   * Create order items.
+   */
 
-      available_quantity:
-        null,
+  const items =
+    input.items.map(
+      (item) => ({
+        order_id:
+          order.id,
 
-      accepted_quantity:
-        null,
+        product_id:
+          item.product_id ||
+          null,
 
-      butchery_note:
-        null,
+        product_name:
+          item.product_name.trim(),
 
-      responded_at:
-        null,
+        quantity:
+          Number(
+            item.quantity
+          ),
 
-      responded_by:
-        null,
+        unit:
+          item.unit ||
+          null,
 
-      response_status:
-        'pending' as OrderItemResponseStatus,
-    }));
+        price:
+          Number(
+            item.price
+          ),
+
+        packaging:
+          item.packaging?.trim() ||
+          null,
+
+        notes:
+          item.notes?.trim() ||
+          null,
+
+        available_quantity:
+          null,
+
+        accepted_quantity:
+          null,
+
+        response_status:
+          'pending',
+      })
+    );
+
 
   const {
-    error: itemsError,
-  } = await supabase
-    .from('order_items')
-    .insert(orderItems);
+    error: itemError,
+  } =
+    await supabase
+      .from('order_items')
+      .insert(
+        items
+      );
 
-  if (itemsError) {
+
+  if (itemError) {
+    /*
+     * Roll the order back if its items
+     * cannot be created.
+     */
+
     await supabase
       .from('orders')
       .delete()
@@ -552,65 +938,31 @@ export async function createOrder(
         order.id
       );
 
+
     throw new Error(
       getFriendlyError(
-        itemsError
+        itemError
       )
     );
   }
 
-  /* -------------------------------------------------------
-     Add status history
-  ------------------------------------------------------- */
 
-  const {
-    error: historyError,
-  } =
-    await supabase
-      .from(
-        'order_status_history'
-      )
-      .insert({
-        order_id: order.id,
-        status: 'pending',
-        changed_by: userId,
-        department:
-          department.trim(),
-        comment:
-          'Order submitted to Butchery.',
-      });
+  /*
+   * Load complete order.
+   */
 
-  if (historyError) {
-    console.error(
-      'Unable to create order history:',
-      historyError
-    );
-  }
-
-  /* -------------------------------------------------------
-     Notify Butchery
-  ------------------------------------------------------- */
-
-  await notifyButcheryNewOrder(
-    order.id,
-    orderNumber,
-    department
-  );
-
-  /* -------------------------------------------------------
-     Return complete order
-  ------------------------------------------------------- */
-
-  const freshOrder =
+  const result =
     await fetchOrderById(
       order.id
     );
 
+
   return (
-    freshOrder ||
+    result ||
     (order as Order)
   );
 }
+
 
 /* =========================================================
    RESPOND TO ORDER ITEM
@@ -630,273 +982,90 @@ export async function respondToOrderItem(
     );
   }
 
+
   if (!userId) {
     throw new Error(
-      'You must be signed in to respond to an order.'
+      'User is required.'
     );
   }
 
+
   if (
-    !isValidQuantity(
-      availableQuantity
-    )
+    !Number.isFinite(
+      Number(availableQuantity)
+    ) ||
+    Number(availableQuantity) < 0
   ) {
     throw new Error(
-      'Available quantity must be zero or greater.'
+      'Available quantity is invalid.'
     );
   }
 
+
   if (
-    !isValidQuantity(
-      acceptedQuantity
-    )
+    !Number.isFinite(
+      Number(acceptedQuantity)
+    ) ||
+    Number(acceptedQuantity) < 0
   ) {
     throw new Error(
-      'Fulfilled quantity must be zero or greater.'
+      'Accepted quantity is invalid.'
     );
   }
 
+
   if (
-    acceptedQuantity >
-    availableQuantity
+    Number(acceptedQuantity) >
+    Number(availableQuantity)
   ) {
     throw new Error(
-      'Fulfilled quantity cannot be greater than available quantity.'
+      'Accepted quantity cannot be greater than available quantity.'
     );
   }
+
 
   const {
-    data: item,
-    error: itemError,
-  } = await supabase
-    .from('order_items')
-    .select(`
-      id,
-      order_id,
-      product_name,
-      quantity
-    `)
-    .eq('id', itemId)
-    .single();
-
-  if (itemError || !item) {
-    throw new Error(
-      getFriendlyError(
-        itemError ||
-          new Error(
-            'Order item not found.'
-          )
-      )
-    );
-  }
-
-  const requestedQuantity =
-    Number(item.quantity);
-
-  if (
-    acceptedQuantity >
-    requestedQuantity
-  ) {
-    throw new Error(
-      'Fulfilled quantity cannot exceed the requested quantity.'
-    );
-  }
-
-  let finalStatus =
-    responseStatus;
-
-  /**
-   * Always derive the response status
-   * from the actual quantities.
-   *
-   * This prevents the UI from accidentally
-   * saving a contradictory status.
-   */
-  if (
-    availableQuantity <= 0 ||
-    acceptedQuantity <= 0
-  ) {
-    finalStatus =
-      'unavailable';
-  } else if (
-    acceptedQuantity <
-    requestedQuantity
-  ) {
-    finalStatus =
-      'partial';
-  } else {
-    finalStatus =
-      'available';
-  }
-
-  const {
-    error: updateError,
-  } = await supabase
-    .from('order_items')
-    .update({
-      available_quantity:
-        availableQuantity,
-
-      accepted_quantity:
-        acceptedQuantity,
-
-      response_status:
-        finalStatus,
-
-      butchery_note:
-        note?.trim() || null,
-
-      responded_at:
-        new Date().toISOString(),
-
-      responded_by:
-        userId,
-    })
-    .eq(
-      'id',
-      itemId
-    );
-
-  if (updateError) {
-    throw new Error(
-      getFriendlyError(
-        updateError
-      )
-    );
-  }
-
-  /* -------------------------------------------------------
-     Notify department that created the order
-  ------------------------------------------------------- */
-
-  const {
-    data: order,
-    error: orderError,
+    error,
   } =
     await supabase
-      .from('orders')
-      .select(`
-        id,
-        order_number,
-        created_by
-      `)
+      .from('order_items')
+      .update({
+        available_quantity:
+          Number(
+            availableQuantity
+          ),
+
+        accepted_quantity:
+          Number(
+            acceptedQuantity
+          ),
+
+        response_status:
+          responseStatus,
+
+        butchery_note:
+          note?.trim() ||
+          null,
+
+        responded_at:
+          new Date().toISOString(),
+
+        responded_by:
+          userId,
+      })
       .eq(
         'id',
-        item.order_id
-      )
-      .single();
+        itemId
+      );
 
-  if (orderError) {
-    console.error(
-      'Unable to load order for notification:',
-      orderError
-    );
 
-    return;
-  }
-
-  if (!order?.created_by) {
-    return;
-  }
-
-  const responseText =
-    finalStatus ===
-    'available'
-      ? 'is available'
-      : finalStatus ===
-          'partial'
-        ? 'is partially available'
-        : 'is unavailable';
-
-  const {
-    error: notificationError,
-  } =
-    await supabase
-      .from('notifications')
-      .insert({
-        user_id:
-          order.created_by,
-
-        type:
-          'butchery_response',
-
-        title:
-          'Butchery Updated Your Order',
-
-        message:
-          `Butchery responded to ${item.product_name} on Order #${order.order_number}: ${responseText}.`,
-
-        order_id:
-          order.id,
-      });
-
-  if (notificationError) {
-    console.error(
-      'Unable to create item response notification:',
-      notificationError
+  if (error) {
+    throw new Error(
+      getFriendlyError(error)
     );
   }
 }
 
-/* =========================================================
-   ACCEPT ORDER
-========================================================= */
-
-export async function acceptOrder(
-  orderId: string,
-  userId: string,
-  department: string,
-  comment?: string
-): Promise<void> {
-  await updateOrderStatus(
-    orderId,
-    'accepted',
-    userId,
-    department,
-    comment ||
-      'Order accepted by Butchery.'
-  );
-}
-
-/* =========================================================
-   START PROCESSING
-========================================================= */
-
-export async function startOrderProcessing(
-  orderId: string,
-  userId: string,
-  department: string,
-  comment?: string
-): Promise<void> {
-  await updateOrderStatus(
-    orderId,
-    'processing',
-    userId,
-    department,
-    comment ||
-      'Butchery started processing this order.'
-  );
-}
-
-/* =========================================================
-   MARK READY
-========================================================= */
-
-export async function markOrderReady(
-  orderId: string,
-  userId: string,
-  department: string,
-  comment?: string
-): Promise<void> {
-  await updateOrderStatus(
-    orderId,
-    'ready',
-    userId,
-    department,
-    comment ||
-      'Order is ready for collection/delivery.'
-  );
-}
 
 /* =========================================================
    UPDATE ORDER STATUS
@@ -911,44 +1080,39 @@ export async function updateOrderStatus(
 ): Promise<void> {
   if (!orderId) {
     throw new Error(
-      'Order ID is required.'
+      'Order ID required.'
     );
   }
+
 
   if (!userId) {
     throw new Error(
-      'You must be signed in.'
+      'User ID required.'
     );
   }
 
-  if (!department?.trim()) {
-    throw new Error(
-      'Department is required.'
-    );
-  }
 
   if (!isOrderStatus(status)) {
     throw new Error(
-      'Invalid order status.'
+      'Invalid status.'
     );
   }
 
-  /* -------------------------------------------------------
-     Get current order first.
-  ------------------------------------------------------- */
+
+  /*
+   * Get current order.
+   */
 
   const {
-    data: currentOrder,
-    error: currentError,
+    data: current,
+    error,
   } =
     await supabase
       .from('orders')
       .select(`
-        id,
-        order_number,
         status,
-        created_by,
-        completed_at
+        order_number,
+        created_by
       `)
       .eq(
         'id',
@@ -956,118 +1120,62 @@ export async function updateOrderStatus(
       )
       .single();
 
-  if (
-    currentError ||
-    !currentOrder
-  ) {
+
+  if (error || !current) {
     throw new Error(
-      getFriendlyError(
-        currentError ||
-          new Error(
-            'Order not found.'
-          )
-      )
+      'Order not found.'
     );
   }
 
-  const currentStatus =
-    currentOrder.status as OrderStatus;
 
-  /* -------------------------------------------------------
-     Ignore duplicate status update.
-  ------------------------------------------------------- */
+  const now =
+    new Date().toISOString();
 
-  if (
-    currentStatus === status
-  ) {
-    return;
-  }
 
-  /* -------------------------------------------------------
-     Validate transition.
-  ------------------------------------------------------- */
-
-  const allowedStatuses =
-    STATUS_TRANSITIONS[
-      currentStatus
-    ] || [];
-
-  if (
-    !allowedStatuses.includes(
-      status
-    )
-  ) {
-    throw new Error(
-      `Order cannot move from ${statusLabel(
-        currentStatus
-      )} to ${statusLabel(status)}.`
-    );
-  }
-
-  /* -------------------------------------------------------
-     Update order.
-  ------------------------------------------------------- */
-
-  const updates: Record<
-    string,
-    unknown
-  > = {
-    status,
-    updated_at:
-      new Date().toISOString(),
-  };
-
-  if (
-    status === 'completed'
-  ) {
-    updates.completed_at =
-      new Date().toISOString();
-  }
+  /*
+   * Update order.
+   */
 
   const {
-    data: updatedOrder,
-    error: orderError,
+    error: updateError,
   } =
     await supabase
       .from('orders')
-      .update(updates)
+      .update({
+        status,
+
+        updated_at:
+          now,
+
+        completed_at:
+          status === 'completed'
+            ? now
+            : null,
+      })
       .eq(
         'id',
         orderId
-      )
-      .select(`
-        *,
-        creator:profiles!orders_created_by_fkey(
-          id
-        )
-      `)
-      .single();
+      );
 
-  if (
-    orderError ||
-    !updatedOrder
-  ) {
+
+  if (updateError) {
     throw new Error(
       getFriendlyError(
-        orderError ||
-          new Error(
-            'Unable to update order status.'
-          )
+        updateError
       )
     );
   }
 
-  /* -------------------------------------------------------
-     Add status history.
-  ------------------------------------------------------- */
+
+  /*
+   * Add status history.
+   */
 
   const {
     error: historyError,
   } =
     await supabase
-      .from(
-        'order_status_history'
-      )
+      .from('order_status_history')
       .insert({
         order_id:
           orderId,
@@ -1078,326 +1186,106 @@ export async function updateOrderStatus(
           userId,
 
         department:
-          department.trim(),
+          department ||
+          null,
 
         comment:
           comment?.trim() ||
           null,
       });
 
+
   if (historyError) {
     console.error(
-      'Unable to save order status history:',
+      'Order status history failed:',
       historyError
     );
   }
 
-  /* -------------------------------------------------------
-     Notify order creator.
-  ------------------------------------------------------- */
 
-  if (
-    updatedOrder.created_by
-  ) {
-    const lowerStatus =
-      status.toLowerCase();
+  /*
+   * Notify the person who created the order.
+   */
 
-    const notificationType =
-      status === 'completed'
-        ? 'order_completed'
-        : 'order_update';
-
-    const notificationTitle =
-      status === 'completed'
-        ? 'Order Completed'
-        : 'Order Status Updated';
-
+  if (current.created_by) {
     const {
-      error:
-        notificationError,
+      error: notificationError,
     } =
       await supabase
-        .from(
-          'notifications'
-        )
+        .from('notifications')
         .insert({
           user_id:
-            updatedOrder.created_by,
+            current.created_by,
 
           type:
-            notificationType,
+            'order_update',
 
           title:
-            notificationTitle,
+            'Order Updated',
 
           message:
-            `Order #${updatedOrder.order_number} is now ${lowerStatus}.`,
+            `Order #${current.order_number} is now ${status}.`,
 
           order_id:
             orderId,
         });
 
-    if (
-      notificationError
-    ) {
+
+    if (notificationError) {
       console.error(
-        'Unable to create status notification:',
+        'Order notification failed:',
         notificationError
       );
     }
   }
-
-  /* -------------------------------------------------------
-     Deduct inventory only when the order actually
-     transitions INTO completed.
-  ------------------------------------------------------- */
-
-  if (
-    status === 'completed' &&
-    currentStatus !== 'completed'
-  ) {
-    await adjustInventoryForOrder(
-      orderId
-    );
-  }
 }
 
+
 /* =========================================================
-   NOTIFY BUTCHERY
+   QUICK STATUS ACTIONS
 ========================================================= */
 
-async function notifyButcheryNewOrder(
+export async function acceptOrder(
   orderId: string,
-  orderNumber: string,
-  fromDepartment: string
+  userId: string,
+  department: string
 ): Promise<void> {
-  const {
-    data: butcheryUsers,
-    error,
-  } =
-    await supabase
-      .from('profiles')
-      .select('id')
-      .eq(
-        'department',
-        'butchery'
-      )
-      .eq(
-        'is_active',
-        true
-      );
-
-  if (error) {
-    console.error(
-      'Unable to load Butchery users:',
-      error
-    );
-
-    return;
-  }
-
-  if (
-    !butcheryUsers?.length
-  ) {
-    return;
-  }
-
-  const departmentName =
-    fromDepartment
-      .charAt(0)
-      .toUpperCase() +
-    fromDepartment.slice(1);
-
-  const notifications =
-    butcheryUsers.map(
-      (user) => ({
-        user_id:
-          user.id,
-
-        type:
-          'new_order',
-
-        title:
-          'New Order Received',
-
-        message:
-          `${departmentName} submitted Order #${orderNumber}.`,
-
-        order_id:
-          orderId,
-      })
-    );
-
-  const {
-    error:
-      notificationError,
-  } =
-    await supabase
-      .from(
-        'notifications'
-      )
-      .insert(
-        notifications
-      );
-
-  if (
-    notificationError
-  ) {
-    console.error(
-      'Unable to create Butchery notifications:',
-      notificationError
-    );
-  }
+  return updateOrderStatus(
+    orderId,
+    'accepted',
+    userId,
+    department
+  );
 }
 
-/* =========================================================
-   ADJUST INVENTORY
-========================================================= */
 
-async function adjustInventoryForOrder(
-  orderId: string
+export async function startOrderProcessing(
+  orderId: string,
+  userId: string,
+  department: string
 ): Promise<void> {
-  const {
-    data: items,
-    error,
-  } =
-    await supabase
-      .from('order_items')
-      .select(`
-        product_id,
-        quantity,
-        accepted_quantity
-      `)
-      .eq(
-        'order_id',
-        orderId
-      );
-
-  if (error) {
-    console.error(
-      'Unable to load order items for inventory:',
-      error
-    );
-
-    return;
-  }
-
-  if (!items?.length) {
-    return;
-  }
-
-  for (const item of items) {
-    if (!item.product_id) {
-      continue;
-    }
-
-    const {
-      data: inventory,
-      error:
-        inventoryError,
-    } =
-      await supabase
-        .from('inventory')
-        .select(
-          'quantity'
-        )
-        .eq(
-          'product_id',
-          item.product_id
-        )
-        .maybeSingle();
-
-    if (inventoryError) {
-      console.error(
-        'Unable to load inventory:',
-        inventoryError
-      );
-
-      continue;
-    }
-
-    if (!inventory) {
-      continue;
-    }
-
-    const fulfilledQuantity =
-      item.accepted_quantity ??
-      item.quantity;
-
-    const currentQuantity =
-      Number(
-        inventory.quantity
-      );
-
-    const newQuantity =
-      Math.max(
-        0,
-        currentQuantity -
-          Number(
-            fulfilledQuantity
-          )
-      );
-
-    const {
-      error:
-        updateError,
-    } =
-      await supabase
-        .from('inventory')
-        .update({
-          quantity:
-            newQuantity,
-
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'product_id',
-          item.product_id
-        );
-
-    if (updateError) {
-      console.error(
-        `Unable to update inventory for product ${item.product_id}:`,
-        updateError
-      );
-    }
-  }
+  return updateOrderStatus(
+    orderId,
+    'processing',
+    userId,
+    department
+  );
 }
 
-/* =========================================================
-   MARK ITEM PREPARED
-========================================================= */
 
-export async function markItemPrepared(
-  itemId: string,
-  prepared: boolean
+export async function markOrderReady(
+  orderId: string,
+  userId: string,
+  department: string
 ): Promise<void> {
-  if (!itemId) {
-    throw new Error(
-      'Order item is required.'
-    );
-  }
-
-  const {
-    error,
-  } = await supabase
-    .from('order_items')
-    .update({
-      is_prepared:
-        prepared,
-    })
-    .eq(
-      'id',
-      itemId
-    );
-
-  if (error) {
-    throw new Error(
-      getFriendlyError(error)
-    );
-  }
+  return updateOrderStatus(
+    orderId,
+    'ready',
+    userId,
+    department
+  );
 }
+
 
 /* =========================================================
    ORDER STATISTICS
@@ -1406,31 +1294,37 @@ export async function markItemPrepared(
 export async function getOrderStats(
   department?: string
 ) {
-  const today =
-    new Date()
-      .toISOString()
-      .slice(0, 10);
+  let query =
+    supabase
+      .from('orders')
+      .select(
+        'status,total,created_at,completed_at'
+      );
 
-  let query = supabase
-    .from('orders')
-    .select(`
-      status,
-      total,
-      created_at,
-      department
-    `);
 
-  if (department) {
-    query = query.eq(
-      'department',
-      department
-    );
+  /*
+   * Only filter by department when a specific
+   * department is actually requested.
+   *
+   * Butchery calls this without a department because
+   * it processes orders created by many departments.
+   */
+
+  if (department?.trim()) {
+    query =
+      query.eq(
+        'department',
+        department
+      );
   }
+
 
   const {
     data,
     error,
-  } = await query;
+  } =
+    await query;
+
 
   if (error) {
     throw new Error(
@@ -1438,98 +1332,137 @@ export async function getOrderStats(
     );
   }
 
+
   const orders =
     data || [];
 
-  const todayOrders =
-    orders.filter(
-      (order) =>
-        String(
-          order.created_at
-        ).startsWith(today)
+
+  const now =
+    new Date();
+
+
+  const startOfToday =
+    new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
     );
 
-  const pending =
-    orders.filter(
-      (order) =>
-        order.status ===
-        'pending'
+
+  const endOfToday =
+    new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1
     );
 
-  const processing =
+
+  const ordersToday =
     orders.filter(
-      (order) =>
-        order.status ===
-          'accepted' ||
-        order.status ===
-          'processing'
+      (order) => {
+        const created =
+          new Date(
+            order.created_at
+          );
+
+        return (
+          created >= startOfToday &&
+          created < endOfToday
+        );
+      }
     );
 
-  const ready =
+
+  const completedToday =
     orders.filter(
-      (order) =>
-        order.status ===
-        'ready'
+      (order) => {
+        if (
+          order.status !==
+          'completed'
+        ) {
+          return false;
+        }
+
+
+        const completedDate =
+          order.completed_at
+            ? new Date(
+                order.completed_at
+              )
+            : new Date(
+                order.created_at
+              );
+
+
+        return (
+          completedDate >=
+            startOfToday &&
+          completedDate <
+            endOfToday
+        );
+      }
     );
 
-  const completed =
-    orders.filter(
-      (order) =>
-        order.status ===
-        'completed'
-    );
 
   return {
     ordersToday:
-      todayOrders.length,
+      ordersToday.length,
 
     pending:
-      pending.length,
+      orders.filter(
+        (o) =>
+          o.status ===
+          'pending'
+      ).length,
 
     processing:
-      processing.length,
+      orders.filter(
+        (o) =>
+          o.status ===
+          'processing'
+      ).length,
 
     ready:
-      ready.length,
+      orders.filter(
+        (o) =>
+          o.status ===
+          'ready'
+      ).length,
 
-    completedToday:
-      todayOrders.filter(
-        (order) =>
-          order.status ===
-          'completed'
+    accepted:
+      orders.filter(
+        (o) =>
+          o.status ===
+          'accepted'
       ).length,
 
     completed:
-      completed.length,
+      orders.filter(
+        (o) =>
+          o.status ===
+          'completed'
+      ).length,
+
+    completedToday:
+      completedToday.length,
 
     totalSales:
-      completed.reduce(
-        (
-          sum,
-          order
-        ) =>
+      orders.reduce(
+        (sum, order) =>
           sum +
           Number(
             order.total || 0
           ),
         0
       ),
-
-    newOrders:
-      pending.length,
   };
 }
+
 
 /* =========================================================
    REALTIME ORDERS
 ========================================================= */
 
-/**
- * Subscribe to order INSERT / UPDATE / DELETE events.
- *
- * The second callback is optional and is used by Orders.tsx
- * to immediately remove deleted orders.
- */
 export function subscribeToOrders(
   callback: (
     order: Order
@@ -1537,134 +1470,85 @@ export function subscribeToOrders(
 
   onDelete?: OrderRealtimeDeleteCallback
 ) {
-  const channelName =
-    `soms-orders-${Math.random()
-      .toString(36)
-      .slice(2)}`;
-
   const channel =
     supabase
       .channel(
-        channelName
+        `orders-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}`
       )
+
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'orders',
         },
-        async (
-          payload
-        ) => {
-          try {
-            const record =
-              payload.new as {
+
+        async (payload) => {
+          /*
+           * DELETE
+           */
+
+          if (
+            payload.eventType ===
+            'DELETE'
+          ) {
+            const old =
+              payload.old as {
                 id?: string;
               };
 
-            if (!record?.id) {
-              return;
-            }
 
-            const order =
-              await fetchOrderById(
-                record.id
+            if (old?.id) {
+              onDelete?.(
+                old.id
               );
-
-            if (order) {
-              callback(order);
             }
-          } catch (error) {
-            console.error(
-              'Realtime order INSERT error:',
-              error
-            );
+
+
+            return;
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders',
-        },
-        async (
-          payload
-        ) => {
-          try {
-            const record =
-              payload.new as {
-                id?: string;
-              };
 
-            if (!record?.id) {
-              return;
-            }
 
-            const order =
-              await fetchOrderById(
-                record.id
-              );
+          /*
+           * INSERT / UPDATE
+           */
 
-            if (order) {
-              callback(order);
-            }
-          } catch (error) {
-            console.error(
-              'Realtime order UPDATE error:',
-              error
-            );
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'orders',
-        },
-        (
-          payload
-        ) => {
           const record =
-            payload.old as {
+            payload.new as {
               id?: string;
             };
 
-          if (
-            record?.id &&
-            onDelete
-          ) {
-            onDelete(
-              record.id
+
+          if (!record?.id) {
+            return;
+          }
+
+
+          try {
+            const order =
+              await fetchOrderById(
+                record.id
+              );
+
+
+            if (order) {
+              callback(order);
+            }
+
+          } catch (error) {
+            console.error(
+              'Realtime order refresh failed:',
+              error
             );
           }
         }
       )
-      .subscribe(
-        (status) => {
-          if (
-            status ===
-            'CHANNEL_ERROR'
-          ) {
-            console.error(
-              'SOMS orders realtime channel error.'
-            );
-          }
 
-          if (
-            status ===
-            'TIMED_OUT'
-          ) {
-            console.error(
-              'SOMS orders realtime channel timed out.'
-            );
-          }
-        }
-      );
+      .subscribe();
+
 
   return () => {
     void supabase.removeChannel(
@@ -1672,6 +1556,7 @@ export function subscribeToOrders(
     );
   };
 }
+
 
 /* =========================================================
    REALTIME ORDER ITEMS
@@ -1681,16 +1566,10 @@ export function subscribeToOrderItems(
   orderId: string,
   callback: () => void
 ) {
-  if (!orderId) {
-    return () => undefined;
-  }
-
   const channel =
     supabase
       .channel(
-        `soms-order-items-${orderId}-${Math.random()
-          .toString(36)
-          .slice(2)}`
+        `items-${orderId}-${Date.now()}`
       )
       .on(
         'postgres_changes',
@@ -1705,18 +1584,8 @@ export function subscribeToOrderItems(
           callback();
         }
       )
-      .subscribe(
-        (status) => {
-          if (
-            status ===
-            'CHANNEL_ERROR'
-          ) {
-            console.error(
-              'Order item realtime channel error.'
-            );
-          }
-        }
-      );
+      .subscribe();
+
 
   return () => {
     void supabase.removeChannel(
@@ -1725,8 +1594,9 @@ export function subscribeToOrderItems(
   };
 }
 
+
 /* =========================================================
-   REALTIME ORDER STATUS HISTORY
+   REALTIME STATUS HISTORY
 ========================================================= */
 
 export function subscribeToOrderStatus(
@@ -1735,46 +1605,29 @@ export function subscribeToOrderStatus(
     history: OrderStatusHistory
   ) => void
 ) {
-  if (!orderId) {
-    return () => undefined;
-  }
-
   const channel =
     supabase
       .channel(
-        `soms-order-status-${orderId}-${Math.random()
-          .toString(36)
-          .slice(2)}`
+        `status-${orderId}-${Date.now()}`
       )
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'order_status_history',
+          table:
+            'order_status_history',
           filter:
             `order_id=eq.${orderId}`,
         },
-        (
-          payload
-        ) => {
+        (payload) => {
           callback(
             payload.new as OrderStatusHistory
           );
         }
       )
-      .subscribe(
-        (status) => {
-          if (
-            status ===
-            'CHANNEL_ERROR'
-          ) {
-            console.error(
-              'Order status realtime channel error.'
-            );
-          }
-        }
-      );
+      .subscribe();
+
 
   return () => {
     void supabase.removeChannel(
@@ -1783,11 +1636,12 @@ export function subscribeToOrderStatus(
   };
 }
 
+
 /* =========================================================
-   EXPORT TYPE
+   EXPORT TYPES
 ========================================================= */
 
 export type {
   OrderItem,
-  OrderStatusHistory
+  OrderStatusHistory,
 };

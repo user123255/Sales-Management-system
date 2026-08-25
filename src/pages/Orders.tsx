@@ -5,231 +5,310 @@ import {
 } from 'react';
 
 import {
-  Search,
-  RefreshCw,
+  AlertTriangle,
+  Edit3,
   Eye,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
 } from 'lucide-react';
 
-import {
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
-import type {
-  Order,
-  OrderStatus,
-} from '../types/database';
+import { useAuth } from '../lib/auth';
 
 import {
+  deleteOrder,
   fetchOrders,
   subscribeToOrders,
 } from '../services/orders';
 
-import { useAuth } from '../lib/auth';
+import { supabase } from '../lib/supabase';
+
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { StatusBadge } from '../components/StatusBadge';
 import { EmptyState } from '../components/EmptyState';
 
+import type { OrderStatus } from '../types/database';
+
+/* =========================================================
+   UPDATE ORDER
+========================================================= */
+
+type UpdateOrderInput = {
+  department?: string;
+  customer_name?: string | null;
+  notes?: string | null;
+  delivery_info?: string | null;
+};
+
+export async function updateOrder(
+  orderId: string,
+  input: UpdateOrderInput,
+  userId: string
+): Promise<OrderRecord> {
+  if (!orderId?.trim()) {
+    throw new Error(
+      'Order ID is required.'
+    );
+  }
+
+  if (!userId?.trim()) {
+    throw new Error(
+      'You must be signed in to edit an order.'
+    );
+  }
+
+  const cleanedOrderId =
+    orderId.trim();
+
+  if (
+    input.department !== undefined &&
+    !input.department.trim()
+  ) {
+    throw new Error(
+      'Department is required.'
+    );
+  }
+
+  const updates: Record<
+    string,
+    unknown
+  > = {
+    updated_at:
+      new Date().toISOString(),
+  };
+
+  if (
+    input.department !== undefined
+  ) {
+    updates.department =
+      input.department.trim();
+  }
+
+  if (
+    input.customer_name !==
+    undefined
+  ) {
+    updates.customer_name =
+      input.customer_name?.trim() ||
+      null;
+  }
+
+  if (
+    input.notes !== undefined
+  ) {
+    updates.notes =
+      input.notes?.trim() ||
+      null;
+  }
+
+  if (
+    input.delivery_info !==
+    undefined
+  ) {
+    updates.delivery_info =
+      input.delivery_info?.trim() ||
+      null;
+  }
+
+  const { data: updatedOrder, error: updateError } = await supabase
+    .from('orders')
+    .update(updates)
+    .eq('id', cleanedOrderId)
+    .select()
+    .single();
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  if (!updatedOrder) {
+    throw new Error('Order not found.');
+  }
+
+  return updatedOrder as OrderRecord;
+}
+
+/* =========================================================
+   TYPES
+========================================================= */
+
+type OrderRecord = {
+  id: string;
+  order_number: string;
+  department: string;
+  status: OrderStatus;
+  total: number;
+  created_at: string;
+  customer_name?: string | null;
+  notes?: string | null;
+  delivery_info?: string | null;
+};
+
+/* =========================================================
+   COMPONENT
+========================================================= */
+
 export default function Orders() {
   const { profile } = useAuth();
-
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [orders, setOrders] =
+    useState<OrderRecord[]>([]);
 
-  const [search, setSearch] = useState('');
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [search, setSearch] =
+    useState('');
+
   const [status, setStatus] =
-    useState<OrderStatus | ''>('');
+    useState('');
 
-  /*
-   * This page can be used from both the normal
-   * Orders section and the Butchery Order Center.
-   *
-   * The destination must therefore match the
-   * section from which the user opened the order.
-   */
-  const isButcheryOrdersPage =
-    location.pathname.startsWith(
-      '/butchery/orders'
-    );
+  const [error, setError] =
+    useState('');
 
-  const getOrderDetailsPath = useCallback(
-    (orderId: string) => {
-      if (isButcheryOrdersPage) {
-        return `/butchery/orders/${orderId}`;
-      }
+  /* =======================================================
+     DELETE
+  ======================================================= */
 
-      return `/orders/${orderId}`;
-    },
-    [isButcheryOrdersPage]
-  );
+  const [deleteTarget, setDeleteTarget] =
+    useState<OrderRecord | null>(null);
 
-  /*
-   * Load orders from Supabase.
-   */
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
+
+  /* =======================================================
+     EDIT
+  ======================================================= */
+
+  const [editTarget, setEditTarget] =
+    useState<OrderRecord | null>(null);
+
+  const [editDepartment, setEditDepartment] =
+    useState('');
+
+  const [editCustomerName, setEditCustomerName] =
+    useState('');
+
+  const [editDeliveryInfo, setEditDeliveryInfo] =
+    useState('');
+
+  const [editNotes, setEditNotes] =
+    useState('');
+
+  const [savingEdit, setSavingEdit] =
+    useState(false);
+
+  /* =======================================================
+     LOAD ORDERS
+  ======================================================= */
+
   const loadOrders = useCallback(
-    async (showLoader = true) => {
+    async () => {
       try {
-        if (showLoader) {
-          setLoading(true);
-        }
+        setLoading(true);
+        setError('');
 
-        const data = await fetchOrders({
-          department:
-            profile?.department || undefined,
+        const data =
+          await fetchOrders({
+            search:
+              search.trim() ||
+              undefined,
 
-          search:
-            search.trim() || undefined,
-
-          status:
-            status || undefined,
-        });
+            status:
+              status
+                ? (status as OrderStatus)
+                : undefined,
+          });
 
         setOrders(
-          Array.isArray(data)
-            ? data
-            : []
+          data as OrderRecord[]
         );
-      } catch (error) {
+      } catch (err) {
         console.error(
           'Unable to load orders:',
-          error
+          err
         );
 
-        setOrders([]);
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load orders.'
+        );
       } finally {
-        if (showLoader) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     },
-    [
-      profile?.department,
-      search,
-      status,
-    ]
+    [search, status]
   );
 
-  /*
-   * Initial load and filter changes.
-   *
-   * Debouncing prevents Supabase from receiving
-   * a request for every individual keystroke.
-   */
+  /* =======================================================
+     LOAD WHEN FILTERS CHANGE
+  ======================================================= */
+
   useEffect(() => {
     const timer =
       window.setTimeout(() => {
-        void loadOrders(true);
+        void loadOrders();
       }, 250);
 
-    return () => {
+    return () =>
       window.clearTimeout(timer);
-    };
   }, [loadOrders]);
 
-  /*
-   * Realtime updates.
-   *
-   * Important:
-   * The subscription is intentionally kept separate
-   * from the initial fetch.
-   */
+  /* =======================================================
+     REALTIME
+  ======================================================= */
+
   useEffect(() => {
     const unsubscribe =
       subscribeToOrders(
-        (updatedOrder) => {
-          const matchesDepartment =
-            !profile?.department ||
-            updatedOrder.department ===
-              profile.department;
+        (incomingOrder) => {
+          const order =
+            incomingOrder as OrderRecord;
 
-          const matchesStatus =
-            !status ||
-            updatedOrder.status ===
-              status;
+          setOrders(
+            (current) => {
+              const exists =
+                current.some(
+                  (item) =>
+                    item.id === order.id
+                );
 
-          const searchValue =
-            search
-              .trim()
-              .toLowerCase();
+              if (exists) {
+                return current.map(
+                  (item) =>
+                    item.id === order.id
+                      ? {
+                          ...item,
+                          ...order,
+                        }
+                      : item
+                );
+              }
 
-          const matchesSearch =
-            !searchValue ||
-            String(
-              updatedOrder.order_number || ''
-            )
-              .toLowerCase()
-              .includes(searchValue) ||
-            String(
-              updatedOrder.customer_name || ''
-            )
-              .toLowerCase()
-              .includes(searchValue) ||
-            String(
-              updatedOrder.department || ''
-            )
-              .toLowerCase()
-              .includes(searchValue);
-
-          /*
-           * If the updated order no longer matches
-           * the current filters, remove it.
-           */
-          if (
-            !matchesDepartment ||
-            !matchesStatus ||
-            !matchesSearch
-          ) {
-            setOrders((current) =>
-              current.filter(
-                (order) =>
-                  order.id !==
-                  updatedOrder.id
-              )
-            );
-
-            return;
-          }
-
-          /*
-           * Otherwise insert or replace it.
-           */
-          setOrders((current) => {
-            const index =
-              current.findIndex(
-                (order) =>
-                  order.id ===
-                  updatedOrder.id
-              );
-
-            if (index === -1) {
               return [
-                updatedOrder,
+                order,
                 ...current,
               ];
             }
-
-            const next = [
-              ...current,
-            ];
-
-            next[index] =
-              updatedOrder;
-
-            return next;
-          });
+          );
         },
 
         (deletedOrderId) => {
-          setOrders((current) =>
-            current.filter(
-              (order) =>
-                order.id !==
-                deletedOrderId
-            )
+          setOrders(
+            (current) =>
+              current.filter(
+                (order) =>
+                  order.id !==
+                  deletedOrderId
+              )
           );
         }
       );
@@ -237,54 +316,233 @@ export default function Orders() {
     return () => {
       unsubscribe();
     };
-  }, [
-    profile?.department,
-    search,
-    status,
-  ]);
+  }, []);
 
-  /*
-   * Manual refresh.
-   */
-  const refresh = async () => {
-    if (refreshing) {
-      return;
-    }
+  /* =======================================================
+     REFRESH
+  ======================================================= */
 
+  async function refresh() {
     setRefreshing(true);
 
     try {
-      await loadOrders(false);
+      await loadOrders();
     } finally {
       setRefreshing(false);
     }
-  };
+  }
 
-  /*
-   * Open the correct details route.
-   */
-  const openOrder = (
-    orderId: string
-  ) => {
-    if (!orderId) {
-      console.error(
-        'Cannot open order: missing order ID'
+  /* =======================================================
+     OPEN EDIT
+  ======================================================= */
+
+  function openEdit(
+    order: OrderRecord
+  ) {
+    setError('');
+
+    setEditTarget(order);
+
+    setEditDepartment(
+      order.department || ''
+    );
+
+    setEditCustomerName(
+      order.customer_name || ''
+    );
+
+    setEditDeliveryInfo(
+      order.delivery_info || ''
+    );
+
+    setEditNotes(
+      order.notes || ''
+    );
+  }
+
+  /* =======================================================
+     CLOSE EDIT
+  ======================================================= */
+
+  function closeEdit() {
+    if (savingEdit) {
+      return;
+    }
+
+    setEditTarget(null);
+  }
+
+  /* =======================================================
+     SAVE EDIT
+  ======================================================= */
+
+  async function saveEdit() {
+    if (!editTarget) {
+      return;
+    }
+
+    if (!profile?.id) {
+      setError(
+        'You must be signed in to edit an order.'
       );
 
       return;
     }
 
-    navigate(
-      getOrderDetailsPath(orderId)
-    );
-  };
+    if (!editDepartment.trim()) {
+      setError(
+        'Department is required.'
+      );
+
+      return;
+    }
+
+    setSavingEdit(true);
+    setError('');
+
+    try {
+      const updated =
+        await updateOrder(
+          editTarget.id,
+          {
+            department:
+              editDepartment.trim(),
+
+            customer_name:
+              editCustomerName.trim() ||
+              null,
+
+            delivery_info:
+              editDeliveryInfo.trim() ||
+              null,
+
+            notes:
+              editNotes.trim() ||
+              null,
+          },
+          profile.id
+        );
+
+      setOrders(
+        (current) =>
+          current.map(
+            (order) =>
+              order.id === updated.id
+                ? {
+                    ...order,
+                    ...(updated as OrderRecord),
+                  }
+                : order
+          )
+      );
+
+      setEditTarget(null);
+    } catch (err) {
+      console.error(
+        'Unable to update order:',
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to update order.'
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  /* =======================================================
+     OPEN DELETE
+  ======================================================= */
+
+  function openDelete(
+    order: OrderRecord
+  ) {
+    setError('');
+    setDeleteTarget(order);
+  }
+
+  /* =======================================================
+     CLOSE DELETE
+  ======================================================= */
+
+  function closeDelete() {
+    if (deletingId) {
+      return;
+    }
+
+    setDeleteTarget(null);
+  }
+
+  /* =======================================================
+     DELETE ORDER
+  ======================================================= */
+
+  async function confirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    if (!profile?.id) {
+      setError(
+        'You must be signed in to delete an order.'
+      );
+
+      setDeleteTarget(null);
+
+      return;
+    }
+
+    const orderId =
+      deleteTarget.id;
+
+    setDeletingId(orderId);
+    setError('');
+
+    try {
+      await deleteOrder(orderId);
+
+      setOrders(
+        (current) =>
+          current.filter(
+            (order) =>
+              order.id !== orderId
+          )
+      );
+
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error(
+        'Unable to delete order:',
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to delete order.'
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <div className="soms-page space-y-6">
-      {/* Header */}
+
+      {/* HEADER */}
+
       <div className="soms-page-header">
+
         <div>
           <div className="mb-2 flex items-center gap-3">
+
             <h1 className="soms-page-title">
               Orders
             </h1>
@@ -293,11 +551,12 @@ export default function Orders() {
               <span className="soms-live-dot" />
               Live
             </span>
+
           </div>
 
           <p className="soms-page-description">
-            View, search, and track orders
-            across the system.
+            View, edit, and manage all
+            orders in the system.
           </p>
         </div>
 
@@ -306,8 +565,8 @@ export default function Orders() {
           onClick={() =>
             void refresh()
           }
-          className="soms-button soms-button-secondary"
           disabled={refreshing}
+          className="soms-button soms-button-secondary"
         >
           <RefreshCw
             size={16}
@@ -320,11 +579,47 @@ export default function Orders() {
 
           Refresh
         </button>
+
       </div>
 
-      {/* Filters */}
+      {/* ERROR */}
+
+      {error && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+
+          <AlertTriangle
+            size={18}
+            className="mt-0.5 shrink-0"
+          />
+
+          <div className="flex-1">
+            <p className="font-semibold">
+              Action failed
+            </p>
+
+            <p className="mt-1">
+              {error}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setError('')
+            }
+          >
+            <X size={17} />
+          </button>
+
+        </div>
+      )}
+
+      {/* FILTERS */}
+
       <div className="soms-filter-bar">
+
         <div className="relative">
+
           <Search
             size={17}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -340,16 +635,14 @@ export default function Orders() {
             placeholder="Search order number or customer..."
             className="soms-input pl-10"
           />
+
         </div>
 
         <select
           value={status}
           onChange={(event) =>
             setStatus(
-              event.target
-                .value as
-                | OrderStatus
-                | ''
+              event.target.value
             )
           }
           className="soms-input"
@@ -382,25 +675,30 @@ export default function Orders() {
             Cancelled
           </option>
         </select>
+
       </div>
 
-      {/* Orders */}
+      {/* TABLE */}
+
       <div className="soms-table-wrapper">
+
         {loading ? (
+
           <div className="flex min-h-[280px] items-center justify-center">
             <LoadingSpinner />
           </div>
+
         ) : orders.length === 0 ? (
+
           <EmptyState
             title="No orders found"
-            description={
-              search || status
-                ? 'There are no orders matching your current filters.'
-                : 'No orders have been created yet.'
-            }
+            description="There are no orders matching your current filters."
           />
+
         ) : (
+
           <table className="soms-table">
+
             <thead>
               <tr>
                 <th>Order</th>
@@ -409,90 +707,390 @@ export default function Orders() {
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Date</th>
-                <th />
+                <th>Actions</th>
               </tr>
             </thead>
 
             <tbody>
+
               {orders.map(
-                (order) => (
-                  <tr
-                    key={order.id}
-                  >
-                    <td>
-                      <strong className="text-slate-900">
-                        #
+                (order) => {
+
+                  const deleting =
+                    deletingId ===
+                    order.id;
+
+                  return (
+                    <tr
+                      key={order.id}
+                    >
+
+                      <td>
+                        <strong className="text-slate-900">
+                          #
+                          {
+                            order.order_number
+                          }
+                        </strong>
+                      </td>
+
+                      <td>
                         {
-                          order.order_number
+                          order.department
                         }
-                      </strong>
-                    </td>
+                      </td>
 
-                    <td>
-                      {order.department ||
-                        '—'}
-                    </td>
-
-                    <td>
-                      {order.customer_name ||
-                        '—'}
-                    </td>
-
-                    <td>
-                      {Number(
-                        order.total || 0
-                      ).toLocaleString(
-                        undefined,
+                      <td>
                         {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
+                          order.customer_name ||
+                          '—'
                         }
-                      )}
-                    </td>
+                      </td>
 
-                    <td>
-                      <StatusBadge
-                        status={
-                          order.status
-                        }
-                      />
-                    </td>
+                      <td>
+                        {Number(
+                          order.total || 0
+                        ).toLocaleString(
+                          undefined,
+                          {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }
+                        )}
+                      </td>
 
-                    <td>
-                      {order.created_at
-                        ? new Date(
-                            order.created_at
-                          ).toLocaleDateString()
-                        : '—'}
-                    </td>
-
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openOrder(
-                            order.id
-                          )
-                        }
-                        disabled={
-                          !order.id
-                        }
-                        className="soms-button soms-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Eye
-                          size={15}
+                      <td>
+                        <StatusBadge
+                          status={
+                            order.status
+                          }
                         />
+                      </td>
 
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                )
+                      <td>
+                        {new Date(
+                          order.created_at
+                        ).toLocaleDateString()}
+                      </td>
+
+                      <td>
+
+                        <div className="flex flex-wrap gap-2">
+
+                          {/* VIEW */}
+
+                          <button
+                            type="button"
+                            disabled={
+                              deleting
+                            }
+                            onClick={() =>
+                              navigate(
+                                `/orders/${order.id}`
+                              )
+                            }
+                            className="soms-button soms-button-secondary"
+                          >
+                            <Eye size={15} />
+                            View
+                          </button>
+
+                          {/* EDIT */}
+
+                          <button
+                            type="button"
+                            disabled={
+                              deleting ||
+                              deletingId !== null
+                            }
+                            onClick={() =>
+                              openEdit(order)
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Edit3 size={15} />
+                            Edit
+                          </button>
+
+                          {/* DELETE */}
+
+                          <button
+                            type="button"
+                            disabled={
+                              deleting ||
+                              deletingId !== null
+                            }
+                            onClick={() =>
+                              openDelete(order)
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deleting ? (
+                              <RefreshCw
+                                size={15}
+                                className="animate-spin"
+                              />
+                            ) : (
+                              <Trash2 size={15} />
+                            )}
+
+                            {deleting
+                              ? 'Deleting...'
+                              : 'Delete'}
+                          </button>
+
+                        </div>
+
+                      </td>
+
+                    </tr>
+                  );
+                }
               )}
+
             </tbody>
+
           </table>
+
         )}
+
       </div>
+
+      {/* =====================================================
+          EDIT MODAL
+      ===================================================== */}
+
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+
+            <div className="flex items-center justify-between border-b border-slate-200 p-6">
+
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Edit Order
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  #
+                  {
+                    editTarget.order_number
+                  }
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEdit}
+                disabled={savingEdit}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={20} />
+              </button>
+
+            </div>
+
+            <div className="space-y-5 p-6">
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Department
+                </label>
+
+                <input
+                  value={editDepartment}
+                  onChange={(event) =>
+                    setEditDepartment(
+                      event.target.value
+                    )
+                  }
+                  className="soms-input w-full"
+                  placeholder="Department"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Customer
+                </label>
+
+                <input
+                  value={editCustomerName}
+                  onChange={(event) =>
+                    setEditCustomerName(
+                      event.target.value
+                    )
+                  }
+                  className="soms-input w-full"
+                  placeholder="Customer name"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Delivery Information
+                </label>
+
+                <input
+                  value={editDeliveryInfo}
+                  onChange={(event) =>
+                    setEditDeliveryInfo(
+                      event.target.value
+                    )
+                  }
+                  className="soms-input w-full"
+                  placeholder="Delivery information"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Notes
+                </label>
+
+                <textarea
+                  value={editNotes}
+                  onChange={(event) =>
+                    setEditNotes(
+                      event.target.value
+                    )
+                  }
+                  rows={4}
+                  className="soms-input w-full resize-none"
+                  placeholder="Order notes..."
+                />
+              </div>
+
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 p-6">
+
+              <button
+                type="button"
+                onClick={closeEdit}
+                disabled={savingEdit}
+                className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void saveEdit()
+                }
+                disabled={savingEdit}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {savingEdit && (
+                  <RefreshCw
+                    size={16}
+                    className="animate-spin"
+                  />
+                )}
+
+                {savingEdit
+                  ? 'Saving...'
+                  : 'Save Changes'}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* =====================================================
+          DELETE CONFIRMATION
+      ===================================================== */}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+
+            <div className="flex items-start gap-4">
+
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <Trash2 size={22} />
+              </div>
+
+              <div>
+
+                <h2 className="text-lg font-bold text-slate-900">
+                  Delete Order?
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Are you sure you want to permanently
+                  delete
+                  <strong className="mx-1 text-slate-900">
+                    #
+                    {
+                      deleteTarget.order_number
+                    }
+                  </strong>
+                  ?
+                </p>
+
+                <p className="mt-2 text-xs leading-5 text-red-600">
+                  The order and its related records
+                  will be removed. This action cannot
+                  be undone.
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+
+              <button
+                type="button"
+                onClick={closeDelete}
+                disabled={
+                  deletingId !== null
+                }
+                className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void confirmDelete()
+                }
+                disabled={
+                  deletingId !== null
+                }
+                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+
+                {deletingId ? (
+                  <RefreshCw
+                    size={16}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Trash2 size={16} />
+                )}
+
+                {deletingId
+                  ? 'Deleting...'
+                  : 'Yes, Delete'}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }

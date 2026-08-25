@@ -4,7 +4,6 @@ import {
   Download,
   Loader2,
   Package,
-  Printer,
   Receipt as ReceiptIcon,
   Search,
   XCircle,
@@ -48,9 +47,6 @@ interface OrderItem {
   product_id?: string;
   product_name?: string;
   name?: string;
-
-  category?: string;
-  product_category?: string;
 
   quantity?: number;
   unit?: string;
@@ -105,12 +101,20 @@ interface Order {
    CONSTANTS
 ========================================================= */
 
-const BRAND_MAROON = '#7A1F2B';
-const BRAND_GOLD = '#C89B3C';
-const DARK = '#20252B';
-const MUTED = '#667085';
-const LIGHT_BORDER = '#E5DFD6';
-const LIGHT_BG = '#FCFBF9';
+const COLORS = {
+  burgundy: '#7A1F2B',
+  burgundyDark: '#641923',
+  gold: '#C89B3C',
+  text: '#20252B',
+  muted: '#667085',
+  light: '#F7F5F2',
+  border: '#E5DFD6',
+  white: '#FFFFFF',
+  green: '#087443',
+  greenBg: '#ECFDF3',
+  amber: '#B54708',
+  amberBg: '#FFFAEB',
+};
 
 /* =========================================================
    HELPERS
@@ -123,7 +127,6 @@ function formatCurrency(value?: number | null) {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
   }).format(amount);
 }
 
@@ -171,12 +174,6 @@ function cleanDisplayValue(value?: string | null) {
   if (!value) return '';
 
   return isUUID(value) ? '' : value;
-}
-
-function safeNumber(value: unknown) {
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : 0;
 }
 
 /* =========================================================
@@ -233,22 +230,12 @@ function getItemName(item: OrderItem) {
   );
 }
 
-function getItemCategory(item: OrderItem) {
-  return (
-    cleanDisplayValue(item.product_category) ||
-    cleanDisplayValue(item.category) ||
-    'Product'
-  );
-}
-
 function getItemPrice(item: OrderItem) {
-  return safeNumber(
-    item.unit_price ?? item.price ?? 0,
-  );
+  return Number(item.unit_price ?? item.price ?? 0);
 }
 
 function getItemQuantity(item: OrderItem) {
-  return safeNumber(item.quantity);
+  return Number(item.quantity || 0);
 }
 
 function getItemTotal(item: OrderItem) {
@@ -256,14 +243,14 @@ function getItemTotal(item: OrderItem) {
     item.line_total !== undefined &&
     item.line_total !== null
   ) {
-    return safeNumber(item.line_total);
+    return Number(item.line_total);
   }
 
   if (
     item.total !== undefined &&
     item.total !== null
   ) {
-    return safeNumber(item.total);
+    return Number(item.total);
   }
 
   return (
@@ -281,7 +268,7 @@ function getOrderSubtotal(order: Order) {
     order.subtotal !== undefined &&
     order.subtotal !== null
   ) {
-    return safeNumber(order.subtotal);
+    return Number(order.subtotal);
   }
 
   return getItems(order).reduce(
@@ -292,7 +279,7 @@ function getOrderSubtotal(order: Order) {
 }
 
 function getOrderDiscount(order: Order) {
-  return safeNumber(order.discount);
+  return Number(order.discount || 0);
 }
 
 function getOrderTotal(order: Order) {
@@ -300,27 +287,26 @@ function getOrderTotal(order: Order) {
     order.grand_total !== undefined &&
     order.grand_total !== null
   ) {
-    return safeNumber(order.grand_total);
+    return Number(order.grand_total);
   }
 
   if (
     order.total_amount !== undefined &&
     order.total_amount !== null
   ) {
-    return safeNumber(order.total_amount);
+    return Number(order.total_amount);
   }
 
   if (
     order.total !== undefined &&
     order.total !== null
   ) {
-    return safeNumber(order.total);
+    return Number(order.total);
   }
 
-  return Math.max(
-    0,
+  return (
     getOrderSubtotal(order) -
-      getOrderDiscount(order),
+    getOrderDiscount(order)
   );
 }
 
@@ -329,9 +315,9 @@ function getOrderTotal(order: Order) {
 ========================================================= */
 
 function isCompletedStatus(status?: string) {
-  const value = String(
-    status || '',
-  ).toLowerCase();
+  const value = String(status || '')
+    .toLowerCase()
+    .trim();
 
   return [
     'completed',
@@ -387,125 +373,1183 @@ function StatusBadge({
    PDF HELPERS
 ========================================================= */
 
-function hexToRgb(hex: string) {
-  const cleaned = hex.replace('#', '');
+function safePdfText(
+  value?: string | number | null,
+) {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return '';
+  }
 
-  const value =
-    cleaned.length === 3
-      ? cleaned
-          .split('')
-          .map((char) => char + char)
-          .join('')
-      : cleaned;
-
-  return {
-    r: parseInt(
-      value.substring(0, 2),
-      16,
-    ),
-    g: parseInt(
-      value.substring(2, 4),
-      16,
-    ),
-    b: parseInt(
-      value.substring(4, 6),
-      16,
-    ),
-  };
+  return String(value);
 }
 
-function setFillColor(
+function drawPdfHeader(
   pdf: jsPDF,
-  color: string,
+  order: Order,
 ) {
-  const rgb = hexToRgb(color);
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const margin = 12;
+
+  /* Top stripe */
 
   pdf.setFillColor(
-    rgb.r,
-    rgb.g,
-    rgb.b,
+    COLORS.burgundy,
   );
-}
 
-function setTextColor(
-  pdf: jsPDF,
-  color: string,
-) {
-  const rgb = hexToRgb(color);
+  pdf.rect(
+    0,
+    0,
+    pageWidth * 0.72,
+    4,
+    'F',
+  );
+
+  pdf.setFillColor(
+    COLORS.gold,
+  );
+
+  pdf.rect(
+    pageWidth * 0.72,
+    0,
+    pageWidth * 0.28,
+    4,
+    'F',
+  );
+
+  /* Logo */
+
+  pdf.setFillColor(
+    COLORS.burgundy,
+  );
+
+  pdf.roundedRect(
+    margin,
+    12,
+    17,
+    17,
+    3,
+    3,
+    'F',
+  );
 
   pdf.setTextColor(
-    rgb.r,
-    rgb.g,
-    rgb.b,
+    COLORS.white,
   );
-}
 
-function setDrawColor(
-  pdf: jsPDF,
-  color: string,
-) {
-  const rgb = hexToRgb(color);
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(18);
+
+  pdf.text(
+    'S',
+    margin + 8.5,
+    24,
+    {
+      align: 'center',
+    },
+  );
+
+  /* Company */
+
+  pdf.setTextColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setFontSize(16);
+
+  pdf.text(
+    'SHANGANI',
+    margin + 22,
+    19,
+  );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    'SALES & ORDER MANAGEMENT',
+    margin + 22,
+    24,
+  );
+
+  /* Document title */
+
+  pdf.setTextColor(
+    COLORS.gold,
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    'OFFICIAL DOCUMENT',
+    pageWidth - margin,
+    14,
+    {
+      align: 'right',
+    },
+  );
+
+  pdf.setTextColor(
+    COLORS.text,
+  );
+
+  pdf.setFontSize(17);
+
+  pdf.text(
+    'ORDER RECEIPT',
+    pageWidth - margin,
+    22,
+    {
+      align: 'right',
+    },
+  );
+
+  pdf.setTextColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setFontSize(10);
+
+  pdf.text(
+    getOrderNumber(order),
+    pageWidth - margin,
+    28,
+    {
+      align: 'right',
+    },
+  );
+
+  /* Divider */
 
   pdf.setDrawColor(
-    rgb.r,
-    rgb.g,
-    rgb.b,
+    COLORS.border,
+  );
+
+  pdf.setLineWidth(0.4);
+
+  pdf.line(
+    margin,
+    34,
+    pageWidth - margin,
+    34,
+  );
+
+  pdf.setDrawColor(
+    COLORS.gold,
+  );
+
+  pdf.setLineWidth(1);
+
+  pdf.line(
+    margin,
+    34,
+    margin + 25,
+    34,
   );
 }
 
-function drawTextRight(
+/* =========================================================
+   DRAW INFORMATION BOXES
+========================================================= */
+
+function drawPdfInformation(
   pdf: jsPDF,
-  text: string,
-  x: number,
-  y: number,
+  order: Order,
 ) {
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const margin = 12;
+
+  const top = 41;
+
+  const gap = 2;
+
+  const boxWidth =
+    (pageWidth -
+      margin * 2 -
+      gap * 2) /
+    3;
+
+  const boxHeight = 20;
+
+  const boxes = [
+    {
+      label: 'CREATED BY',
+      value: getRequester(order),
+    },
+    {
+      label: 'DEPARTMENT',
+      value: getDepartment(order),
+    },
+    {
+      label: 'ORDER NO.',
+      value: getOrderNumber(order),
+    },
+    {
+      label: 'DATE',
+      value: formatDate(
+        order.created_at,
+      ),
+    },
+    {
+      label: 'TIME',
+      value: formatTime(
+        order.created_at,
+      ),
+    },
+    {
+      label: 'STATUS',
+      value:
+        order.status || 'Pending',
+    },
+  ];
+
+  boxes.forEach(
+    (box, index) => {
+      const row =
+        Math.floor(index / 3);
+
+      const column =
+        index % 3;
+
+      const x =
+        margin +
+        column *
+          (boxWidth + gap);
+
+      const y =
+        top +
+        row *
+          (boxHeight + gap);
+
+      pdf.setFillColor(
+        '#FCFBF9',
+      );
+
+      pdf.setDrawColor(
+        COLORS.border,
+      );
+
+      pdf.setLineWidth(0.3);
+
+      pdf.roundedRect(
+        x,
+        y,
+        boxWidth,
+        boxHeight,
+        2,
+        2,
+        'FD',
+      );
+
+      pdf.setTextColor(
+        COLORS.muted,
+      );
+
+      pdf.setFont(
+        'helvetica',
+        'bold',
+      );
+
+      pdf.setFontSize(6.5);
+
+      pdf.text(
+        box.label,
+        x + 4,
+        y + 6,
+      );
+
+      const completed =
+        index === 5 &&
+        isCompletedStatus(
+          order.status,
+        );
+
+      pdf.setTextColor(
+        completed
+          ? COLORS.green
+          : index === 5
+            ? COLORS.amber
+            : COLORS.text,
+      );
+
+      pdf.setFontSize(8.5);
+
+      pdf.text(
+        safePdfText(
+          box.value,
+        ),
+        x + 4,
+        y + 14,
+        {
+          maxWidth:
+            boxWidth - 8,
+        },
+      );
+    },
+  );
+
+  return (
+    top +
+    2 * (boxHeight + gap)
+  );
+}
+
+/* =========================================================
+   DRAW PRODUCTS TABLE
+========================================================= */
+
+function drawPdfProductsTable(
+  pdf: jsPDF,
+  order: Order,
+  startY: number,
+) {
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const pageHeight =
+    pdf.internal.pageSize.getHeight();
+
+  const margin = 12;
+
+  let y = startY + 10;
+
+  const usableWidth =
+    pageWidth - margin * 2;
+
+  const columns = [
+    {
+      title: '#',
+      width: 8,
+    },
+    {
+      title: 'PRODUCT',
+      width: 38,
+    },
+    {
+      title: 'QTY',
+      width: 12,
+    },
+    {
+      title: 'UNIT',
+      width: 17,
+    },
+    {
+      title: 'PACKAGING',
+      width: 25,
+    },
+    {
+      title: 'UNIT PRICE',
+      width: 27,
+    },
+    {
+      title: 'LINE TOTAL',
+      width:
+        usableWidth -
+        8 -
+        38 -
+        12 -
+        17 -
+        25 -
+        27,
+    },
+  ];
+
+  /* Section title */
+
+  pdf.setTextColor(
+    COLORS.gold,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(7);
+
   pdf.text(
-    text,
-    x,
+    '01',
+    margin,
+    y,
+  );
+
+  pdf.setTextColor(
+    COLORS.text,
+  );
+
+  pdf.setFontSize(11);
+
+  pdf.text(
+    'Ordered Products',
+    margin + 8,
+    y,
+  );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    `${getItems(order).length} product line(s)`,
+    pageWidth - margin,
     y,
     {
       align: 'right',
     },
   );
+
+  y += 5;
+
+  /* Table header */
+
+  let x = margin;
+
+  const headerHeight = 9;
+
+  pdf.setFillColor(
+    COLORS.burgundy,
+  );
+
+  pdf.rect(
+    margin,
+    y,
+    usableWidth,
+    headerHeight,
+    'F',
+  );
+
+  pdf.setTextColor(
+    COLORS.white,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(6);
+
+  columns.forEach(
+    (column) => {
+      pdf.text(
+        column.title,
+        x + 2,
+        y + 5.8,
+      );
+
+      x += column.width;
+    },
+  );
+
+  y += headerHeight;
+
+  const items =
+    getItems(order);
+
+  if (items.length === 0) {
+    pdf.setFillColor(
+      '#FCFBF9',
+    );
+
+    pdf.rect(
+      margin,
+      y,
+      usableWidth,
+      20,
+      'F',
+    );
+
+    pdf.setTextColor(
+      COLORS.muted,
+    );
+
+    pdf.setFontSize(8);
+
+    pdf.text(
+      'No products were found for this order.',
+      pageWidth / 2,
+      y + 12,
+      {
+        align: 'center',
+      },
+    );
+
+    return y + 20;
+  }
+
+  items.forEach(
+    (item, index) => {
+      const product =
+        getItemName(item);
+
+      const notes =
+        item.notes
+          ? `\n${item.notes}`
+          : '';
+
+      const productLines =
+        pdf.splitTextToSize(
+          product + notes,
+          columns[1].width - 5,
+        );
+
+      const rowHeight =
+        Math.max(
+          13,
+          productLines.length *
+            4 +
+            7,
+        );
+
+      /* Page break */
+
+      if (
+        y + rowHeight >
+        pageHeight - 35
+      ) {
+        pdf.addPage();
+
+        drawPdfHeader(
+          pdf,
+          order,
+        );
+
+        y = 42;
+
+        /* repeat table header */
+
+        let repeatX = margin;
+
+        pdf.setFillColor(
+          COLORS.burgundy,
+        );
+
+        pdf.rect(
+          margin,
+          y,
+          usableWidth,
+          headerHeight,
+          'F',
+        );
+
+        pdf.setTextColor(
+          COLORS.white,
+        );
+
+        pdf.setFont(
+          'helvetica',
+          'bold',
+        );
+
+        pdf.setFontSize(6);
+
+        columns.forEach(
+          (column) => {
+            pdf.text(
+              column.title,
+              repeatX + 2,
+              y + 5.8,
+            );
+
+            repeatX +=
+              column.width;
+          },
+        );
+
+        y += headerHeight;
+      }
+
+      pdf.setFillColor(
+        index % 2 === 0
+          ? COLORS.white
+          : '#FCFBFA',
+      );
+
+      pdf.rect(
+        margin,
+        y,
+        usableWidth,
+        rowHeight,
+        'F',
+      );
+
+      pdf.setDrawColor(
+        '#EBE6DF',
+      );
+
+      pdf.setLineWidth(0.2);
+
+      pdf.line(
+        margin,
+        y + rowHeight,
+        pageWidth - margin,
+        y + rowHeight,
+      );
+
+      let cellX = margin;
+
+      pdf.setTextColor(
+        COLORS.text,
+      );
+
+      pdf.setFont(
+        'helvetica',
+        'normal',
+      );
+
+      pdf.setFontSize(7);
+
+      /* # */
+
+      pdf.text(
+        String(index + 1),
+        cellX + 2,
+        y + 7,
+      );
+
+      cellX += columns[0].width;
+
+      /* Product */
+
+      pdf.setFont(
+        'helvetica',
+        'bold',
+      );
+
+      pdf.text(
+        productLines,
+        cellX + 2,
+        y + 6,
+        {
+          maxWidth:
+            columns[1].width - 4,
+        },
+      );
+
+      cellX += columns[1].width;
+
+      /* Quantity */
+
+      pdf.setFont(
+        'helvetica',
+        'normal',
+      );
+
+      pdf.text(
+        String(
+          getItemQuantity(item),
+        ),
+        cellX + 2,
+        y + 7,
+      );
+
+      cellX += columns[2].width;
+
+      /* Unit */
+
+      pdf.text(
+        item.unit || '—',
+        cellX + 2,
+        y + 7,
+        {
+          maxWidth:
+            columns[3].width - 4,
+        },
+      );
+
+      cellX += columns[3].width;
+
+      /* Packaging */
+
+      pdf.text(
+        item.packaging || '—',
+        cellX + 2,
+        y + 7,
+        {
+          maxWidth:
+            columns[4].width - 4,
+        },
+      );
+
+      cellX += columns[4].width;
+
+      /* Unit price */
+
+      pdf.text(
+        formatCurrency(
+          getItemPrice(item),
+        ),
+        cellX +
+          columns[5].width -
+          2,
+        y + 7,
+        {
+          align: 'right',
+        },
+      );
+
+      cellX += columns[5].width;
+
+      /* Line total */
+
+      pdf.setFont(
+        'helvetica',
+        'bold',
+      );
+
+      pdf.text(
+        formatCurrency(
+          getItemTotal(item),
+        ),
+        cellX +
+          columns[6].width -
+          2,
+        y + 7,
+        {
+          align: 'right',
+        },
+      );
+
+      y += rowHeight;
+    },
+  );
+
+  /* Quantity total */
+
+  const totalQuantity =
+    items.reduce(
+      (sum, item) =>
+        sum +
+        getItemQuantity(item),
+      0,
+    );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'normal',
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    'Total quantity requested:',
+    pageWidth - margin - 48,
+    y + 7,
+  );
+
+  pdf.setTextColor(
+    COLORS.text,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.text(
+    String(totalQuantity),
+    pageWidth - margin,
+    y + 7,
+    {
+      align: 'right',
+    },
+  );
+
+  return y + 14;
 }
 
-function drawTextCenter(
+/* =========================================================
+   DRAW SUMMARY
+========================================================= */
+
+function drawPdfSummary(
   pdf: jsPDF,
-  text: string,
-  x: number,
-  y: number,
+  order: Order,
+  startY: number,
 ) {
-  pdf.text(
-    text,
-    x,
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const pageHeight =
+    pdf.internal.pageSize.getHeight();
+
+  const margin = 12;
+
+  let y = startY + 4;
+
+  const notesWidth =
+    pageWidth - margin * 2 - 78;
+
+  const totalsX =
+    pageWidth - margin - 72;
+
+  const totalsWidth = 72;
+
+  const notesHeight = 38;
+
+  if (
+    y + notesHeight >
+    pageHeight - 28
+  ) {
+    pdf.addPage();
+
+    drawPdfHeader(
+      pdf,
+      order,
+    );
+
+    y = 42;
+  }
+
+  /* Notes box */
+
+  pdf.setFillColor(
+    '#FCFBF9',
+  );
+
+  pdf.setDrawColor(
+    COLORS.border,
+  );
+
+  pdf.setLineWidth(0.3);
+
+  pdf.roundedRect(
+    margin,
     y,
+    notesWidth,
+    notesHeight,
+    2,
+    2,
+    'FD',
+  );
+
+  pdf.setTextColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(6.5);
+
+  pdf.text(
+    'ORDER NOTES',
+    margin + 4,
+    y + 7,
+  );
+
+  pdf.setTextColor(
+    '#475467',
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'normal',
+  );
+
+  pdf.setFontSize(7);
+
+  const noteText =
+    order.notes ||
+    'No additional order notes were provided.';
+
+  const noteLines =
+    pdf.splitTextToSize(
+      noteText,
+      notesWidth - 8,
+    );
+
+  pdf.text(
+    noteLines,
+    margin + 4,
+    y + 14,
+    {
+      maxWidth:
+        notesWidth - 8,
+    },
+  );
+
+  /* Totals */
+
+  pdf.setDrawColor(
+    COLORS.border,
+  );
+
+  pdf.roundedRect(
+    totalsX,
+    y,
+    totalsWidth,
+    notesHeight,
+    2,
+    2,
+    'S',
+  );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    'Subtotal',
+    totalsX + 4,
+    y + 9,
+  );
+
+  pdf.setTextColor(
+    COLORS.text,
+  );
+
+  pdf.text(
+    formatCurrency(
+      getOrderSubtotal(order),
+    ),
+    totalsX +
+      totalsWidth -
+      4,
+    y + 9,
+    {
+      align: 'right',
+    },
+  );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.text(
+    'Discount',
+    totalsX + 4,
+    y + 16,
+  );
+
+  pdf.setTextColor(
+    COLORS.text,
+  );
+
+  pdf.text(
+    formatCurrency(
+      getOrderDiscount(order),
+    ),
+    totalsX +
+      totalsWidth -
+      4,
+    y + 16,
+    {
+      align: 'right',
+    },
+  );
+
+  pdf.setDrawColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setLineWidth(0.8);
+
+  pdf.line(
+    totalsX + 4,
+    y + 21,
+    totalsX +
+      totalsWidth -
+      4,
+    y + 21,
+  );
+
+  pdf.setTextColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(10);
+
+  pdf.text(
+    'TOTAL',
+    totalsX + 4,
+    y + 30,
+  );
+
+  pdf.text(
+    formatCurrency(
+      getOrderTotal(order),
+    ),
+    totalsX +
+      totalsWidth -
+      4,
+    y + 30,
+    {
+      align: 'right',
+    },
+  );
+
+  return y + notesHeight;
+}
+
+/* =========================================================
+   DRAW FOOTER
+========================================================= */
+
+function drawPdfFooter(
+  pdf: jsPDF,
+  order: Order,
+) {
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const pageHeight =
+    pdf.internal.pageSize.getHeight();
+
+  const margin = 12;
+
+  const footerY =
+    pageHeight - 19;
+
+  pdf.setDrawColor(
+    COLORS.border,
+  );
+
+  pdf.setLineWidth(0.3);
+
+  pdf.line(
+    margin,
+    footerY - 4,
+    pageWidth - margin,
+    footerY - 4,
+  );
+
+  pdf.setTextColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(8);
+
+  pdf.text(
+    'SHANGANI',
+    margin,
+    footerY + 2,
+  );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'normal',
+  );
+
+  pdf.setFontSize(6);
+
+  pdf.text(
+    'SOMS',
+    margin,
+    footerY + 7,
+  );
+
+  pdf.setTextColor(
+    COLORS.text,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    'Thank you for using SOMS.',
+    pageWidth / 2,
+    footerY + 1,
     {
       align: 'center',
     },
   );
-}
 
-function drawWrappedText(
-  pdf: jsPDF,
-  text: string,
-  x: number,
-  y: number,
-  width: number,
-  lineHeight = 4,
-) {
-  const lines =
-    pdf.splitTextToSize(
-      text || '',
-      width,
-    );
-
-  pdf.text(
-    lines,
-    x,
-    y,
+  pdf.setTextColor(
+    COLORS.muted,
   );
 
-  return y + lines.length * lineHeight;
+  pdf.setFont(
+    'helvetica',
+    'normal',
+  );
+
+  pdf.setFontSize(5.5);
+
+  pdf.text(
+    'This receipt is generated from the recorded order information.',
+    pageWidth / 2,
+    footerY + 6,
+    {
+      align: 'center',
+    },
+  );
+
+  pdf.setTextColor(
+    COLORS.muted,
+  );
+
+  pdf.setFontSize(5.5);
+
+  pdf.text(
+    'ORDER REFERENCE',
+    pageWidth - margin,
+    footerY + 1,
+    {
+      align: 'right',
+    },
+  );
+
+  pdf.setTextColor(
+    COLORS.burgundy,
+  );
+
+  pdf.setFont(
+    'helvetica',
+    'bold',
+  );
+
+  pdf.setFontSize(7);
+
+  pdf.text(
+    getOrderNumber(order),
+    pageWidth - margin,
+    footerY + 7,
+    {
+      align: 'right',
+    },
+  );
 }
 
 /* =========================================================
@@ -522,1318 +1566,75 @@ function generateReceiptPDF(
     compress: true,
   });
 
-  const pageWidth =
-    pdf.internal.pageSize.getWidth();
-
-  const pageHeight =
-    pdf.internal.pageSize.getHeight();
-
-  const margin = 10;
-
-  const contentWidth =
-    pageWidth - margin * 2;
-
-  let y = margin;
-
-  /* -------------------------------------------------------
-     PAGE BACKGROUND
-  ------------------------------------------------------- */
-
-  pdf.setFillColor(255, 255, 255);
-
-  pdf.rect(
-    0,
-    0,
-    pageWidth,
-    pageHeight,
-    'F',
-  );
-
-  /* -------------------------------------------------------
-     TOP STRIPE
-  ------------------------------------------------------- */
-
-  setFillColor(
+  drawPdfHeader(
     pdf,
-    BRAND_MAROON,
+    order,
   );
 
-  pdf.rect(
-    0,
-    0,
-    pageWidth * 0.72,
-    5,
-    'F',
-  );
-
-  setFillColor(
-    pdf,
-    BRAND_GOLD,
-  );
-
-  pdf.rect(
-    pageWidth * 0.72,
-    0,
-    pageWidth * 0.28,
-    5,
-    'F',
-  );
-
-  y = 16;
-
-  /* -------------------------------------------------------
-     HEADER
-  ------------------------------------------------------- */
-
-  setFillColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.roundedRect(
-    margin,
-    y,
-    22,
-    22,
-    3,
-    3,
-    'F',
-  );
-
-  setTextColor(
-    pdf,
-    '#FFFFFF',
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(22);
-
-  drawTextCenter(
-    pdf,
-    'S',
-    margin + 11,
-    y + 15,
-  );
-
-  setTextColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(18);
-
-  pdf.text(
-    'SHANGANI',
-    margin + 27,
-    y + 9,
-  );
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(7);
-
-  pdf.text(
-    'SALES & ORDER MANAGEMENT',
-    margin + 27,
-    y + 15,
-  );
-
-  setTextColor(
-    pdf,
-    BRAND_GOLD,
-  );
-
-  pdf.setFontSize(7);
-
-  drawTextRight(
-    pdf,
-    'OFFICIAL DOCUMENT',
-    pageWidth - margin,
-    y + 3,
-  );
-
-  setTextColor(
-    pdf,
-    DARK,
-  );
-
-  pdf.setFontSize(19);
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  drawTextRight(
-    pdf,
-    'ORDER RECEIPT',
-    pageWidth - margin,
-    y + 11,
-  );
-
-  setTextColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setFontSize(10);
-
-  drawTextRight(
-    pdf,
-    getOrderNumber(order),
-    pageWidth - margin,
-    y + 18,
-  );
-
-  y += 29;
-
-  /* -------------------------------------------------------
-     GOLD LINE
-  ------------------------------------------------------- */
-
-  setDrawColor(
-    pdf,
-    LIGHT_BORDER,
-  );
-
-  pdf.setLineWidth(0.3);
-
-  pdf.line(
-    margin,
-    y,
-    pageWidth - margin,
-    y,
-  );
-
-  setDrawColor(
-    pdf,
-    BRAND_GOLD,
-  );
-
-  pdf.setLineWidth(1);
-
-  pdf.line(
-    margin,
-    y,
-    margin + 28,
-    y,
-  );
-
-  y += 8;
-
-  /* -------------------------------------------------------
-     ORDER INFORMATION
-  ------------------------------------------------------- */
-
-  const infoColumns = 3;
-
-  const infoWidth =
-    contentWidth / infoColumns;
-
-  const infoHeight = 21;
-
-  const infoItems = [
-    [
-      'CREATED BY',
-      getRequester(order),
-    ],
-    [
-      'DEPARTMENT',
-      getDepartment(order),
-    ],
-    [
-      'ORDER NO.',
-      getOrderNumber(order),
-    ],
-    [
-      'DATE',
-      formatDate(order.created_at),
-    ],
-    [
-      'TIME',
-      formatTime(order.created_at),
-    ],
-    [
-      'STATUS',
-      order.status || 'Pending',
-    ],
-  ];
-
-  infoItems.forEach(
-    ([label, value], index) => {
-      const row =
-        Math.floor(
-          index / infoColumns,
-        );
-
-      const column =
-        index % infoColumns;
-
-      const x =
-        margin +
-        column * infoWidth;
-
-      const boxY =
-        y + row * infoHeight;
-
-      setFillColor(
-        pdf,
-        LIGHT_BG,
-      );
-
-      setDrawColor(
-        pdf,
-        LIGHT_BORDER,
-      );
-
-      pdf.setLineWidth(0.25);
-
-      pdf.rect(
-        x,
-        boxY,
-        infoWidth,
-        infoHeight,
-        'FD',
-      );
-
-      setTextColor(
-        pdf,
-        MUTED,
-      );
-
-      pdf.setFont(
-        'helvetica',
-        'bold',
-      );
-
-      pdf.setFontSize(6.5);
-
-      pdf.text(
-        label,
-        x + 4,
-        boxY + 6,
-      );
-
-      const completed =
-        isCompletedStatus(
-          order.status,
-        );
-
-      setTextColor(
-        pdf,
-        label === 'STATUS'
-          ? completed
-            ? '#087443'
-            : '#B54708'
-          : DARK,
-      );
-
-      pdf.setFontSize(8);
-
-      const displayValue =
-        String(value || '—');
-
-      const wrapped =
-        pdf.splitTextToSize(
-          displayValue,
-          infoWidth - 8,
-        );
-
-      pdf.text(
-        wrapped.slice(0, 2),
-        x + 4,
-        boxY + 13,
-      );
-    },
-  );
-
-  y += infoHeight * 2 + 9;
-
-  /* -------------------------------------------------------
-     PRODUCTS TITLE
-  ------------------------------------------------------- */
-
-  setTextColor(
-    pdf,
-    BRAND_GOLD,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(7);
-
-  pdf.text(
-    '01',
-    margin,
-    y,
-  );
-
-  setTextColor(
-    pdf,
-    DARK,
-  );
-
-  pdf.setFontSize(12);
-
-  pdf.text(
-    'Ordered Products',
-    margin + 8,
-    y,
-  );
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFontSize(7);
-
-  drawTextRight(
-    pdf,
-    `${getItems(order).length} product line(s)`,
-    pageWidth - margin,
-    y,
-  );
-
-  y += 5;
-
-  /* -------------------------------------------------------
-     PRODUCTS TABLE
-  ------------------------------------------------------- */
-
-  const tableX = margin;
-
-  const tableWidth =
-    contentWidth;
-
-  const columns = [
-    {
-      title: '#',
-      width: 7,
-    },
-    {
-      title: 'PRODUCT',
-      width: 37,
-    },
-    {
-      title: 'CATEGORY',
-      width: 25,
-    },
-    {
-      title: 'QTY',
-      width: 11,
-    },
-    {
-      title: 'UNIT',
-      width: 14,
-    },
-    {
-      title: 'PACKAGING',
-      width: 25,
-    },
-    {
-      title: 'UNIT PRICE',
-      width: 25,
-    },
-    {
-      title: 'TOTAL',
-      width: 26,
-    },
-  ];
-
-  let currentX = tableX;
-
-  setFillColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.rect(
-    tableX,
-    y,
-    tableWidth,
-    8,
-    'F',
-  );
-
-  setTextColor(
-    pdf,
-    '#FFFFFF',
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(5.8);
-
-  columns.forEach(
-    (column) => {
-      if (
-        column.title === 'QTY'
-      ) {
-        drawTextCenter(
-          pdf,
-          column.title,
-          currentX +
-            column.width / 2,
-          y + 5.2,
-        );
-      } else if (
-        column.title ===
-          'UNIT PRICE' ||
-        column.title ===
-          'TOTAL'
-      ) {
-        drawTextRight(
-          pdf,
-          column.title,
-          currentX +
-            column.width -
-            2,
-          y + 5.2,
-        );
-      } else {
-        pdf.text(
-          column.title,
-          currentX + 2,
-          y + 5.2,
-        );
-      }
-
-      currentX += column.width;
-    },
-  );
-
-  y += 8;
-
-  const items = getItems(order);
-
-  if (items.length === 0) {
-    setDrawColor(
+  const informationEnd =
+    drawPdfInformation(
       pdf,
-      LIGHT_BORDER,
+      order,
     );
 
-    pdf.rect(
-      tableX,
-      y,
-      tableWidth,
-      15,
-    );
-
-    setTextColor(
+  const productsEnd =
+    drawPdfProductsTable(
       pdf,
-      MUTED,
+      order,
+      informationEnd + 5,
     );
 
-    pdf.setFontSize(8);
-
-    drawTextCenter(
+  const summaryEnd =
+    drawPdfSummary(
       pdf,
-      'No products were found for this order.',
-      pageWidth / 2,
-      y + 9,
+      order,
+      productsEnd,
     );
 
-    y += 15;
-  } else {
-    items.forEach(
-      (item, index) => {
-        const productName =
-          getItemName(item);
-
-        const category =
-          getItemCategory(item);
-
-        const packaging =
-          item.packaging || '—';
-
-        const unit =
-          item.unit || '—';
-
-        const notes =
-          item.notes || '';
-
-        const productLines =
-          pdf.splitTextToSize(
-            productName,
-            columns[1].width - 4,
-          );
-
-        const packagingLines =
-          pdf.splitTextToSize(
-            packaging,
-            columns[5].width - 4,
-          );
-
-        const notesLines =
-          notes
-            ? pdf.splitTextToSize(
-                notes,
-                columns[1].width - 4,
-              )
-            : [];
-
-        const maxLines =
-          Math.max(
-            productLines.length,
-            packagingLines.length,
-            notesLines.length + 1,
-          );
-
-        const rowHeight = Math.max(
-          12,
-          4 +
-            maxLines * 3.5,
-        );
-
-        /* Page break before row */
-
-        if (
-          y + rowHeight >
-          pageHeight - 20
-        ) {
-          pdf.addPage();
-
-          y = 12;
-
-          /* Repeat table header */
-
-          setFillColor(
-            pdf,
-            BRAND_MAROON,
-          );
-
-          pdf.rect(
-            tableX,
-            y,
-            tableWidth,
-            8,
-            'F',
-          );
-
-          currentX = tableX;
-
-          setTextColor(
-            pdf,
-            '#FFFFFF',
-          );
-
-          pdf.setFontSize(5.8);
-
-          columns.forEach(
-            (column) => {
-              if (
-                column.title ===
-                'QTY'
-              ) {
-                drawTextCenter(
-                  pdf,
-                  column.title,
-                  currentX +
-                    column.width /
-                      2,
-                  y + 5.2,
-                );
-              } else if (
-                column.title ===
-                  'UNIT PRICE' ||
-                column.title ===
-                  'TOTAL'
-              ) {
-                drawTextRight(
-                  pdf,
-                  column.title,
-                  currentX +
-                    column.width -
-                    2,
-                  y + 5.2,
-                );
-              } else {
-                pdf.text(
-                  column.title,
-                  currentX + 2,
-                  y + 5.2,
-                );
-              }
-
-              currentX +=
-                column.width;
-            },
-          );
-
-          y += 8;
-        }
-
-        if (index % 2 === 1) {
-          setFillColor(
-            pdf,
-            '#FCFBFA',
-          );
-
-          pdf.rect(
-            tableX,
-            y,
-            tableWidth,
-            rowHeight,
-            'F',
-          );
-        }
-
-        setDrawColor(
-          pdf,
-          '#E5E0D8',
-        );
-
-        pdf.setLineWidth(
-          0.2,
-        );
-
-        pdf.rect(
-          tableX,
-          y,
-          tableWidth,
-          rowHeight,
-        );
-
-        currentX = tableX;
-
-        const cells = [
-          {
-            value: String(
-              index + 1,
-            ),
-            width:
-              columns[0].width,
-            align: 'center',
-          },
-          {
-            value: productName,
-            width:
-              columns[1].width,
-            align: 'left',
-          },
-          {
-            value: category,
-            width:
-              columns[2].width,
-            align: 'left',
-          },
-          {
-            value: String(
-              getItemQuantity(
-                item,
-              ),
-            ),
-            width:
-              columns[3].width,
-            align: 'center',
-          },
-          {
-            value: unit,
-            width:
-              columns[4].width,
-            align: 'left',
-          },
-          {
-            value: packaging,
-            width:
-              columns[5].width,
-            align: 'left',
-          },
-          {
-            value: formatCurrency(
-              getItemPrice(
-                item,
-              ),
-            ),
-            width:
-              columns[6].width,
-            align: 'right',
-          },
-          {
-            value: formatCurrency(
-              getItemTotal(item),
-            ),
-            width:
-              columns[7].width,
-            align: 'right',
-          },
-        ];
-
-        cells.forEach(
-          (cell, cellIndex) => {
-            setTextColor(
-              pdf,
-              cellIndex ===
-                7
-                ? DARK
-                : '#475467',
-            );
-
-            pdf.setFont(
-              'helvetica',
-              cellIndex ===
-                7
-                ? 'bold'
-                : 'normal',
-            );
-
-            pdf.setFontSize(
-              cellIndex ===
-                1
-                ? 6.7
-                : 6.2,
-            );
-
-            const cellX =
-              currentX;
-
-            const textY =
-              y + 5;
-
-            const cellWidth =
-              cell.width;
-
-            const lines =
-              pdf.splitTextToSize(
-                cell.value,
-                cellWidth - 4,
-              );
-
-            if (
-              cell.align ===
-              'right'
-            ) {
-              lines
-                .slice(0, 4)
-                .forEach(
-                  (
-                    line: string,
-                    lineIndex: number,
-                  ) => {
-                    drawTextRight(
-                      pdf,
-                      line,
-                      cellX +
-                        cellWidth -
-                        2,
-                      textY +
-                        lineIndex *
-                          3.4,
-                    );
-                  },
-                );
-            } else if (
-              cell.align ===
-              'center'
-            ) {
-              lines
-                .slice(0, 4)
-                .forEach(
-                  (
-                    line: string,
-                    lineIndex: number,
-                  ) => {
-                    drawTextCenter(
-                      pdf,
-                      line,
-                      cellX +
-                        cellWidth /
-                          2,
-                      textY +
-                        lineIndex *
-                          3.4,
-                    );
-                  },
-                );
-            } else {
-              lines
-                .slice(0, 4)
-                .forEach(
-                  (
-                    line: string,
-                    lineIndex: number,
-                  ) => {
-                    pdf.text(
-                      line,
-                      cellX + 2,
-                      textY +
-                        lineIndex *
-                          3.4,
-                    );
-                  },
-                );
-            }
-
-            currentX +=
-              cellWidth;
-          },
-        );
-
-        /* Notes under product name */
-
-        if (notes) {
-          setTextColor(
-            pdf,
-            MUTED,
-          );
-
-          pdf.setFont(
-            'helvetica',
-            'italic',
-          );
-
-          pdf.setFontSize(5.3);
-
-          pdf.text(
-            notesLines
-              .slice(0, 2),
-            tableX +
-              columns[0]
-                .width +
-              columns[1]
-                .width -
-              columns[1]
-                .width +
-              2,
-            y +
-              rowHeight -
-              3,
-          );
-        }
-
-        y += rowHeight;
-      },
-    );
-  }
-
-  /* -------------------------------------------------------
-     QUANTITY TOTAL
-  ------------------------------------------------------- */
-
-  const totalQuantity =
-    items.reduce(
-      (sum, item) =>
-        sum +
-        getItemQuantity(item),
-      0,
-    );
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'normal',
-  );
-
-  pdf.setFontSize(7);
-
-  drawTextRight(
-    pdf,
-    `Total quantity requested: ${totalQuantity}`,
-    pageWidth - margin,
-    y + 5,
-  );
-
-  y += 12;
-
-  /* -------------------------------------------------------
-     SUMMARY
-  ------------------------------------------------------- */
+  /*
+   * Footer should be visible on the
+   * final page.
+   */
 
   if (
-    y + 47 >
-    pageHeight - 15
+    summaryEnd >
+    pdf.internal.pageSize.getHeight() -
+      25
   ) {
     pdf.addPage();
 
-    y = 15;
+    drawPdfHeader(
+      pdf,
+      order,
+    );
   }
 
-  const summaryGap = 6;
-
-  const totalsWidth = 62;
-
-  const notesWidth =
-    contentWidth -
-    totalsWidth -
-    summaryGap;
-
-  /* NOTES */
-
-  setFillColor(
+  drawPdfFooter(
     pdf,
-    LIGHT_BG,
+    order,
   );
 
-  setDrawColor(
-    pdf,
-    LIGHT_BORDER,
-  );
-
-  pdf.roundedRect(
-    margin,
-    y,
-    notesWidth,
-    43,
-    2,
-    2,
-    'FD',
-  );
-
-  setTextColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(6.5);
-
-  pdf.text(
-    'ORDER NOTES',
-    margin + 5,
-    y + 7,
-  );
-
-  setTextColor(
-    pdf,
-    '#475467',
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'normal',
-  );
-
-  pdf.setFontSize(7);
-
-  drawWrappedText(
-    pdf,
-    order.notes ||
-      'No additional order notes were provided.',
-    margin + 5,
-    y + 14,
-    notesWidth - 10,
-    4,
-  );
-
-  /* TOTALS */
-
-  setDrawColor(
-    pdf,
-    LIGHT_BORDER,
-  );
-
-  pdf.roundedRect(
-    margin +
-      notesWidth +
-      summaryGap,
-    y,
-    totalsWidth,
-    43,
-    2,
-    2,
-    'S',
-  );
-
-  const totalsX =
-    margin +
-    notesWidth +
-    summaryGap;
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'normal',
-  );
-
-  pdf.setFontSize(7);
-
-  pdf.text(
-    'Subtotal',
-    totalsX + 5,
-    y + 9,
-  );
-
-  drawTextRight(
-    pdf,
-    formatCurrency(
-      getOrderSubtotal(order),
-    ),
-    totalsX +
-      totalsWidth -
-      5,
-    y + 9,
-  );
-
-  pdf.text(
-    'Discount',
-    totalsX + 5,
-    y + 17,
-  );
-
-  drawTextRight(
-    pdf,
-    formatCurrency(
-      getOrderDiscount(order),
-    ),
-    totalsX +
-      totalsWidth -
-      5,
-    y + 17,
-  );
-
-  setDrawColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setLineWidth(0.8);
-
-  pdf.line(
-    totalsX + 5,
-    y + 23,
-    totalsX +
-      totalsWidth -
-      5,
-    y + 23,
-  );
-
-  setTextColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(11);
-
-  pdf.text(
-    'TOTAL',
-    totalsX + 5,
-    y + 33,
-  );
-
-  drawTextRight(
-    pdf,
-    formatCurrency(
-      getOrderTotal(order),
-    ),
-    totalsX +
-      totalsWidth -
-      5,
-    y + 33,
-  );
-
-  y += 51;
-
-  /* -------------------------------------------------------
-     FOOTER
-  ------------------------------------------------------- */
-
-  if (
-    y + 25 >
-    pageHeight - 8
-  ) {
-    pdf.addPage();
-
-    y = 15;
-  }
-
-  setDrawColor(
-    pdf,
-    LIGHT_BORDER,
-  );
-
-  pdf.setLineWidth(0.3);
-
-  pdf.line(
-    margin,
-    y,
-    pageWidth - margin,
-    y,
-  );
-
-  y += 8;
-
-  setTextColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(9);
-
-  pdf.text(
-    'SHANGANI',
-    margin,
-    y,
-  );
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFontSize(6);
-
-  pdf.text(
-    'SOMS',
-    margin,
-    y + 5,
-  );
-
-  setTextColor(
-    pdf,
-    DARK,
-  );
-
-  pdf.setFontSize(6.5);
-
-  drawTextCenter(
-    pdf,
-    'Thank you for using SOMS.',
-    pageWidth / 2,
-    y,
-  );
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFontSize(5.5);
-
-  drawTextCenter(
-    pdf,
-    'This receipt is generated from the recorded order information.',
-    pageWidth / 2,
-    y + 5,
-  );
-
-  setTextColor(
-    pdf,
-    MUTED,
-  );
-
-  pdf.setFontSize(5.5);
-
-  drawTextRight(
-    pdf,
-    'ORDER REFERENCE',
-    pageWidth - margin,
-    y,
-  );
-
-  setTextColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.setFont(
-    'helvetica',
-    'bold',
-  );
-
-  pdf.setFontSize(7);
-
-  drawTextRight(
-    pdf,
-    getOrderNumber(order),
-    pageWidth - margin,
-    y + 5,
-  );
-
-  /* -------------------------------------------------------
-     BOTTOM STRIPE
-  ------------------------------------------------------- */
-
-  const bottomY =
-    pageHeight - 4;
-
-  setFillColor(
-    pdf,
-    BRAND_GOLD,
-  );
-
-  pdf.rect(
-    0,
-    bottomY,
-    pageWidth * 0.28,
-    4,
-    'F',
-  );
-
-  setFillColor(
-    pdf,
-    BRAND_MAROON,
-  );
-
-  pdf.rect(
-    pageWidth * 0.28,
-    bottomY,
-    pageWidth * 0.72,
-    4,
-    'F',
-  );
-
-  /* -------------------------------------------------------
-     PAGE NUMBERS
-  ------------------------------------------------------- */
-
-  const totalPages =
+  /*
+   * Add page numbers.
+   */
+
+  const pageCount =
     pdf.getNumberOfPages();
 
   for (
     let page = 1;
-    page <= totalPages;
-    page++
+    page <= pageCount;
+    page += 1
   ) {
     pdf.setPage(page);
 
-    setTextColor(
-      pdf,
+    const pageWidth =
+      pdf.internal.pageSize.getWidth();
+
+    const pageHeight =
+      pdf.internal.pageSize.getHeight();
+
+    pdf.setTextColor(
       '#98A2B3',
     );
 
@@ -1842,17 +1643,24 @@ function generateReceiptPDF(
       'normal',
     );
 
-    pdf.setFontSize(5);
+    pdf.setFontSize(5.5);
 
-    drawTextCenter(
-      pdf,
-      `Page ${page} of ${totalPages}`,
+    pdf.text(
+      `Page ${page} of ${pageCount}`,
       pageWidth / 2,
-      pageHeight - 6,
+      pageHeight - 5,
+      {
+        align: 'center',
+      },
     );
   }
 
-  return pdf;
+  const filename =
+    `SOMS-Receipt-${getOrderNumber(
+      order,
+    )}.pdf`;
+
+  pdf.save(filename);
 }
 
 /* =========================================================
@@ -1860,43 +1668,28 @@ function generateReceiptPDF(
 ========================================================= */
 
 export function Receipts() {
-  const {
-    orderId,
-  } = useParams<{
-    orderId?: string;
-  }>();
+  const { orderId } =
+    useParams<{
+      orderId?: string;
+    }>();
 
-  const [
-    orders,
-    setOrders,
-  ] = useState<Order[]>([]);
+  const [orders, setOrders] =
+    useState<Order[]>([]);
 
-  const [
-    selectedOrder,
-    setSelectedOrder,
-  ] = useState<Order | null>(null);
+  const [selectedOrder, setSelectedOrder] =
+    useState<Order | null>(null);
 
-  const [
-    search,
-    setSearch,
-  ] = useState('');
+  const [search, setSearch] =
+    useState('');
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(
-    null,
-  );
+  const [error, setError] =
+    useState<string | null>(null);
 
-  const [
-    downloading,
-    setDownloading,
-  ] = useState(false);
+  const [downloading, setDownloading] =
+    useState(false);
 
   /* =======================================================
      LOAD ORDERS
@@ -1917,12 +1710,9 @@ export function Receipts() {
             *,
             order_items (*)
           `)
-          .order(
-            'created_at',
-            {
-              ascending: false,
-            },
-          );
+          .order('created_at', {
+            ascending: false,
+          });
 
         if (queryError) {
           throw queryError;
@@ -1931,9 +1721,9 @@ export function Receipts() {
         let loadedOrders =
           (data || []) as Order[];
 
-        /* ---------------------------------------------------
-           CREATOR IDs
-        --------------------------------------------------- */
+        /* -------------------------------------------------
+           CREATOR IDS
+        ------------------------------------------------- */
 
         const creatorIds =
           Array.from(
@@ -1959,9 +1749,9 @@ export function Receipts() {
             string
           >();
 
-        /* ---------------------------------------------------
+        /* -------------------------------------------------
            PROFILES
-        --------------------------------------------------- */
+        ------------------------------------------------- */
 
         if (
           creatorIds.length > 0
@@ -2020,9 +1810,9 @@ export function Receipts() {
           }
         }
 
-        /* ---------------------------------------------------
+        /* -------------------------------------------------
            USERS FALLBACK
-        --------------------------------------------------- */
+        ------------------------------------------------- */
 
         if (
           creatorIds.length > 0
@@ -2068,9 +1858,9 @@ export function Receipts() {
           }
         }
 
-        /* ---------------------------------------------------
-           DEPARTMENTS
-        --------------------------------------------------- */
+        /* -------------------------------------------------
+           DEPARTMENT IDS
+        ------------------------------------------------- */
 
         const departmentIds =
           Array.from(
@@ -2095,6 +1885,10 @@ export function Receipts() {
             string,
             string
           >();
+
+        /* -------------------------------------------------
+           DEPARTMENTS
+        ------------------------------------------------- */
 
         if (
           departmentIds.length > 0
@@ -2139,9 +1933,9 @@ export function Receipts() {
           }
         }
 
-        /* ---------------------------------------------------
+        /* -------------------------------------------------
            DISPLAY VALUES
-        --------------------------------------------------- */
+        ------------------------------------------------- */
 
         loadedOrders =
           loadedOrders.map(
@@ -2189,9 +1983,9 @@ export function Receipts() {
           loadedOrders,
         );
 
-        /* ---------------------------------------------------
-           SELECT ORDER
-        --------------------------------------------------- */
+        /* -------------------------------------------------
+           SELECT ORDER FROM URL
+        ------------------------------------------------- */
 
         if (orderId) {
           const matchingOrder =
@@ -2207,9 +2001,7 @@ export function Receipts() {
                   orderId,
             );
 
-          if (
-            matchingOrder
-          ) {
+          if (matchingOrder) {
             setSelectedOrder(
               matchingOrder,
             );
@@ -2236,7 +2028,7 @@ export function Receipts() {
   }, [loadOrders]);
 
   /* =======================================================
-     TITLE
+     DOCUMENT TITLE
   ======================================================= */
 
   useEffect(() => {
@@ -2312,24 +2104,11 @@ export function Receipts() {
     }, [orders, search]);
 
   /* =======================================================
-     PRINT
-  ======================================================= */
-
-  const printReceipt =
-    () => {
-      if (!selectedOrder) {
-        return;
-      }
-
-      window.print();
-    };
-
-  /* =======================================================
      DOWNLOAD PDF
   ======================================================= */
 
   const downloadPDF =
-    () => {
+    useCallback(async () => {
       if (!selectedOrder) {
         return;
       }
@@ -2338,27 +2117,22 @@ export function Receipts() {
         setDownloading(true);
 
         /*
-         * IMPORTANT:
-         *
-         * We intentionally DO NOT use html2canvas here.
-         * The old implementation depended on rendering the
-         * entire React/CSS receipt into a canvas. Tailwind/Vite
-         * styles can cause html2canvas to fail.
-         *
-         * Instead, jsPDF creates the PDF directly.
+         * Allow React/UI to finish any pending
+         * updates before generating the PDF.
          */
 
-        const pdf =
-          generateReceiptPDF(
-            selectedOrder,
-          );
+        await new Promise<void>(
+          (resolve) => {
+            window.setTimeout(
+              resolve,
+              50,
+            );
+          },
+        );
 
-        const filename =
-          `SOMS-Receipt-${getOrderNumber(
-            selectedOrder,
-          )}.pdf`;
-
-        pdf.save(filename);
+        generateReceiptPDF(
+          selectedOrder,
+        );
       } catch (err) {
         console.error(
           'PDF generation failed:',
@@ -2371,7 +2145,7 @@ export function Receipts() {
       } finally {
         setDownloading(false);
       }
-    };
+    }, [selectedOrder]);
 
   /* =======================================================
      LOADING
@@ -2443,9 +2217,9 @@ export function Receipts() {
   return (
     <div className="soms-page">
 
-      {/* ===================================================
-          PAGE HEADER
-      =================================================== */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
       <div
         className="
@@ -2456,7 +2230,6 @@ export function Receipts() {
           lg:flex-row
           lg:items-center
           lg:justify-between
-          print:hidden
         "
       >
         <div className="flex items-center gap-3">
@@ -2482,85 +2255,57 @@ export function Receipts() {
             </h1>
 
             <p className="mt-1 text-sm text-slate-500">
-              View, print and download order receipts.
+              View and download order receipts as PDF.
             </p>
           </div>
+
         </div>
 
         {selectedOrder && (
-          <div className="flex flex-wrap gap-2">
-
-            <button
-              type="button"
-              onClick={printReceipt}
-              className="
-                inline-flex
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                border
-                border-slate-200
-                bg-white
-                px-5
-                py-2.5
-                text-sm
-                font-bold
-                text-slate-700
-                shadow-sm
-                transition
-                hover:border-slate-300
-                hover:bg-slate-50
-              "
-            >
-              <Printer className="h-4 w-4" />
-              Print Receipt
-            </button>
-
-            <button
-              type="button"
-              onClick={downloadPDF}
-              disabled={downloading}
-              className="
-                inline-flex
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                bg-[#7A1F2B]
-                px-5
-                py-2.5
-                text-sm
-                font-bold
-                text-white
-                shadow-lg
-                shadow-[#7A1F2B]/20
-                transition
-                hover:bg-[#641923]
-                disabled:cursor-not-allowed
-                disabled:opacity-60
-              "
-            >
-              {downloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating PDF...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  Download PDF
-                </>
-              )}
-            </button>
-
-          </div>
+          <button
+            type="button"
+            onClick={() =>
+              void downloadPDF()
+            }
+            disabled={downloading}
+            className="
+              inline-flex
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              bg-[#7A1F2B]
+              px-5
+              py-2.5
+              text-sm
+              font-bold
+              text-white
+              shadow-lg
+              shadow-[#7A1F2B]/20
+              transition
+              hover:bg-[#641923]
+              disabled:cursor-not-allowed
+              disabled:opacity-60
+            "
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Creating PDF...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                Download PDF
+              </>
+            )}
+          </button>
         )}
       </div>
 
-      {/* ===================================================
+      {/* =================================================
           SELECTED RECEIPT
-      =================================================== */}
+      ================================================= */}
 
       {selectedOrder ? (
 
@@ -2571,19 +2316,15 @@ export function Receipts() {
           ================================================= */}
 
           <div
-            id="printable-receipt"
             className="
               receipt-document
               overflow-hidden
               bg-white
               shadow-xl
-              print:shadow-none
             "
           >
 
             <div className="receipt-top-stripe" />
-
-            {/* HEADER */}
 
             <div className="receipt-header">
 
@@ -2630,14 +2371,12 @@ export function Receipts() {
 
             <div className="receipt-gold-line" />
 
-            {/* ORDER INFORMATION */}
+            {/* INFORMATION */}
 
             <div className="receipt-information">
 
               <div className="receipt-info-box">
-                <span>
-                  CREATED BY
-                </span>
+                <span>CREATED BY</span>
 
                 <strong>
                   {getRequester(
@@ -2647,9 +2386,7 @@ export function Receipts() {
               </div>
 
               <div className="receipt-info-box">
-                <span>
-                  DEPARTMENT
-                </span>
+                <span>DEPARTMENT</span>
 
                 <strong>
                   {getDepartment(
@@ -2659,9 +2396,7 @@ export function Receipts() {
               </div>
 
               <div className="receipt-info-box">
-                <span>
-                  ORDER NO.
-                </span>
+                <span>ORDER NO.</span>
 
                 <strong>
                   {getOrderNumber(
@@ -2671,9 +2406,7 @@ export function Receipts() {
               </div>
 
               <div className="receipt-info-box">
-                <span>
-                  DATE
-                </span>
+                <span>DATE</span>
 
                 <strong>
                   {formatDate(
@@ -2683,9 +2416,7 @@ export function Receipts() {
               </div>
 
               <div className="receipt-info-box">
-                <span>
-                  TIME
-                </span>
+                <span>TIME</span>
 
                 <strong>
                   {formatTime(
@@ -2695,9 +2426,7 @@ export function Receipts() {
               </div>
 
               <div className="receipt-info-box status-info">
-                <span>
-                  STATUS
-                </span>
+                <span>STATUS</span>
 
                 <StatusBadge
                   status={
@@ -2715,9 +2444,7 @@ export function Receipts() {
               <div className="receipt-section-title">
 
                 <div>
-                  <span>
-                    01
-                  </span>
+                  <span>01</span>
 
                   <h3>
                     Ordered Products
@@ -2740,12 +2467,14 @@ export function Receipts() {
               ).length === 0 ? (
 
                 <div className="receipt-empty-products">
+
                   <Package className="mx-auto h-8 w-8 text-slate-300" />
 
                   <p>
                     No products were found
                     for this order.
                   </p>
+
                 </div>
 
               ) : (
@@ -2758,7 +2487,6 @@ export function Receipts() {
                       <tr>
                         <th>#</th>
                         <th>PRODUCT</th>
-                        <th>CATEGORY</th>
                         <th>QTY</th>
                         <th>UNIT</th>
                         <th>PACKAGING</th>
@@ -2801,17 +2529,11 @@ export function Receipts() {
 
                               {item.notes && (
                                 <small>
-                                  {item.notes}
+                                  {
+                                    item.notes
+                                  }
                                 </small>
                               )}
-                            </td>
-
-                            <td>
-                              <span className="category-badge">
-                                {getItemCategory(
-                                  item,
-                                )}
-                              </span>
                             </td>
 
                             <td className="quantity">
@@ -2849,7 +2571,6 @@ export function Receipts() {
                             </td>
 
                           </tr>
-
                         ),
                       )}
 
@@ -2861,7 +2582,9 @@ export function Receipts() {
               )}
 
               <div className="receipt-quantity-total">
+
                 Total quantity requested:{' '}
+
                 <strong>
                   {getItems(
                     selectedOrder,
@@ -2877,6 +2600,7 @@ export function Receipts() {
                     0,
                   )}
                 </strong>
+
               </div>
 
             </div>
@@ -2953,6 +2677,7 @@ export function Receipts() {
             <div className="receipt-footer">
 
               <div className="footer-brand">
+
                 <strong>
                   SHANGANI
                 </strong>
@@ -2960,6 +2685,7 @@ export function Receipts() {
                 <span>
                   SOMS
                 </span>
+
               </div>
 
               <div className="footer-message">
@@ -3000,7 +2726,7 @@ export function Receipts() {
               SIDE DETAILS
           ================================================= */}
 
-          <aside className="print:hidden">
+          <aside>
 
             <div className="soms-card p-5">
 
@@ -3112,39 +2838,16 @@ export function Receipts() {
 
               </div>
 
-              <button
-                type="button"
-                onClick={printReceipt}
-                className="
-                  mt-6
-                  flex
-                  w-full
-                  items-center
-                  justify-center
-                  gap-2
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-4
-                  py-2.5
-                  text-sm
-                  font-bold
-                  text-slate-700
-                  transition
-                  hover:bg-slate-50
-                "
-              >
-                <Printer className="h-4 w-4" />
-                Print Receipt
-              </button>
+              {/* ONLY PDF BUTTON */}
 
               <button
                 type="button"
-                onClick={downloadPDF}
+                onClick={() =>
+                  void downloadPDF()
+                }
                 disabled={downloading}
                 className="
-                  mt-2
+                  mt-6
                   flex
                   w-full
                   items-center
@@ -3228,9 +2931,7 @@ export function Receipts() {
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-400">
-                  Select an order to view,
-                  print or download its
-                  receipt.
+                  Select an order to view and download its receipt.
                 </p>
               </div>
 
@@ -3307,8 +3008,7 @@ export function Receipts() {
               </h3>
 
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
-                Orders created in SOMS
-                will appear here.
+                Orders created in SOMS will appear here.
               </p>
 
             </div>
@@ -3406,8 +3106,7 @@ export function Receipts() {
                           item
                           {getItems(
                             order,
-                          ).length ===
-                          1
+                          ).length === 1
                             ? ''
                             : 's'}
                         </p>
@@ -3432,9 +3131,9 @@ export function Receipts() {
         </div>
       )}
 
-      {/* ===================================================
-          RECEIPT DESIGN
-      =================================================== */}
+      {/* =================================================
+          RECEIPT PREVIEW STYLES
+      ================================================= */}
 
       <style>
         {`
@@ -3707,16 +3406,6 @@ export function Receipts() {
             font-size: 9px;
           }
 
-          .category-badge {
-            display: inline-flex;
-            padding: 4px 7px;
-            border-radius: 6px;
-            background: #f3eee6;
-            color: #6f6255;
-            font-size: 8.5px;
-            font-weight: 750;
-          }
-
           .strong-total {
             color: #20252b;
             font-weight: 850;
@@ -3964,89 +3653,7 @@ export function Receipts() {
             }
 
             .receipt-products-table {
-              min-width: 850px;
-            }
-          }
-
-          @media print {
-
-            @page {
-              size: A4;
-              margin: 8mm;
-            }
-
-            html,
-            body {
-              background: #ffffff !important;
-            }
-
-            body * {
-              visibility: hidden !important;
-            }
-
-            #printable-receipt,
-            #printable-receipt * {
-              visibility: visible !important;
-            }
-
-            #printable-receipt {
-              position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 100% !important;
-              max-width: none !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              border: 0 !important;
-              box-shadow: none !important;
-              border-radius: 0 !important;
-              background: #ffffff !important;
-            }
-
-            .receipt-top-stripe,
-            .receipt-bottom-stripe,
-            .receipt-products-table th,
-            .receipt-notes,
-            .category-badge {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-
-            .receipt-table-container {
-              overflow: visible !important;
-            }
-
-            .receipt-products-table {
-              min-width: 0 !important;
-              font-size: 8px;
-            }
-
-            .receipt-products-table th {
-              padding: 7px 5px;
-              font-size: 6.5px;
-            }
-
-            .receipt-products-table td {
-              padding: 7px 5px;
-            }
-
-            .receipt-header {
-              padding-top: 18px;
-              padding-bottom: 15px;
-            }
-
-            .receipt-products-section,
-            .receipt-summary-grid,
-            .receipt-footer {
-              break-inside: avoid;
-            }
-
-            .receipt-products-table tr {
-              break-inside: avoid;
-            }
-
-            .print\\:hidden {
-              display: none !important;
+              min-width: 760px;
             }
           }
 

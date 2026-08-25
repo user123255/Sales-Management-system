@@ -23,7 +23,7 @@ import { Invoices } from './pages/Invoices';
 import { Inventory } from './pages/Inventory';
 import { Products } from './pages/Products';
 import { Reports } from './pages/Reports';
-import { Notifications } from './pages/Notifications';
+import Notifications from './pages/Notifications';
 import { Settings } from './pages/Settings';
 
 import { MainLayout } from './layouts/MainLayout';
