@@ -7,14 +7,25 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { Session, User } from '@supabase/supabase-js';
+import type {
+  Session,
+  User,
+} from '@supabase/supabase-js';
 
-import { supabase, getFriendlyError } from './supabase';
+import {
+  supabase,
+  getFriendlyError,
+} from './supabase';
+
 import type {
   Department,
   UserRole,
   NotificationPreferences,
 } from '../types/database';
+
+/* =========================================================
+   PROFILE TYPE
+========================================================= */
 
 export interface Profile {
   id: string;
@@ -28,6 +39,10 @@ export interface Profile {
   created_at: string;
   updated_at: string;
 }
+
+/* =========================================================
+   AUTH CONTEXT
+========================================================= */
 
 interface AuthContextType {
   session: Session | null;
@@ -52,182 +67,433 @@ interface AuthContextType {
 
   refreshProfile: () => Promise<void>;
 
-  updateProfile: (updates: Partial<Profile>) => Promise<void>;
+  updateProfile: (
+    updates: Partial<Profile>
+  ) => Promise<void>;
 
-  changePassword: (newPassword: string) => Promise<void>;
+  changePassword: (
+    newPassword: string
+  ) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+/* =========================================================
+   CONTEXT
+========================================================= */
 
-const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  order_updates: true,
-  new_orders: true,
-  completed_orders: true,
-};
+const AuthContext =
+  createContext<AuthContextType | undefined>(
+    undefined
+  );
+
+/* =========================================================
+   DEFAULT NOTIFICATION SETTINGS
+========================================================= */
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences =
+  {
+    order_updates: true,
+    new_orders: true,
+    completed_orders: true,
+  };
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function getAuthErrorMessage(
+  error: unknown
+): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error
+  ) {
+    const message = String(
+      (error as { message?: unknown }).message ||
+        ''
+    );
+
+    const normalized = message.toLowerCase();
+
+    if (
+      normalized.includes(
+        'invalid login credentials'
+      )
+    ) {
+      return 'Invalid email or password. Please check your email and password and try again.';
+    }
+
+    if (
+      normalized.includes(
+        'email not confirmed'
+      )
+    ) {
+      return 'This account has not been confirmed yet. Disable email confirmation in Supabase Authentication settings to allow immediate login.';
+    }
+
+    if (
+      normalized.includes(
+        'user already registered'
+      )
+    ) {
+      return 'An account with this email already exists. Please sign in instead.';
+    }
+
+    if (
+      normalized.includes(
+        'password should be at least'
+      )
+    ) {
+      return 'Password must be at least 6 characters.';
+    }
+
+    return getFriendlyError(
+      error as Parameters<
+        typeof getFriendlyError
+      >[0]
+    );
+  }
+
+  return 'Authentication failed. Please try again.';
+}
+
+/* =========================================================
+   AUTH PROVIDER
+========================================================= */
 
 export function AuthProvider({
   children,
 }: {
   children: ReactNode;
 }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] =
+    useState<Session | null>(null);
 
-  /**
-   * Fetch the user's profile from Supabase.
-   */
-  const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+  const [user, setUser] =
+    useState<User | null>(null);
 
-    if (error) {
-      console.error('Failed to fetch profile:', error);
-      return null;
-    }
+  const [profile, setProfile] =
+    useState<Profile | null>(null);
 
-    if (!data) {
-      return null;
-    }
+  const [loading, setLoading] =
+    useState(true);
 
-    return data as Profile;
-  }, []);
+  /* =======================================================
+     FETCH PROFILE
+  ======================================================= */
 
-  /**
-   * Refresh the currently authenticated user's profile.
-   */
-  const refreshProfile = useCallback(async () => {
-    if (!user) {
-      setProfile(null);
-      return;
-    }
+  const fetchProfile = useCallback(
+    async (
+      userId: string
+    ): Promise<Profile | null> => {
+      if (!userId) {
+        return null;
+      }
 
-    const profileData = await fetchProfile(user.id);
+      try {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
 
-    setProfile(profileData);
-  }, [user, fetchProfile]);
+        if (error) {
+          console.error(
+            'Failed to fetch profile:',
+            error
+          );
 
-  /**
-   * Initialize authentication state.
-   */
+          return null;
+        }
+
+        if (!data) {
+          return null;
+        }
+
+        return data as Profile;
+      } catch (error) {
+        console.error(
+          'Profile fetch failed:',
+          error
+        );
+
+        return null;
+      }
+    },
+    []
+  );
+
+  /* =======================================================
+     REFRESH PROFILE
+  ======================================================= */
+
+  const refreshProfile =
+    useCallback(async () => {
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+
+      const profileData =
+        await fetchProfile(user.id);
+
+      setProfile(profileData);
+    }, [user, fetchProfile]);
+
+  /* =======================================================
+     INITIALIZE AUTHENTICATION
+  ======================================================= */
+
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
-      try {
-        const {
-          data: { session: currentSession },
-        } = await supabase.auth.getSession();
+    const initializeAuth =
+      async () => {
+        try {
+          const {
+            data,
+            error,
+          } =
+            await supabase.auth.getSession();
 
-        if (!mounted) return;
+          if (error) {
+            console.error(
+              'Failed to get authentication session:',
+              error
+            );
+          }
 
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+          if (!mounted) {
+            return;
+          }
 
-        if (currentSession?.user) {
-          const profileData = await fetchProfile(
-            currentSession.user.id
+          const currentSession =
+            data?.session ?? null;
+
+          const currentUser =
+            currentSession?.user ?? null;
+
+          setSession(
+            currentSession
+          );
+
+          setUser(currentUser);
+
+          if (currentUser) {
+            const profileData =
+              await fetchProfile(
+                currentUser.id
+              );
+
+            if (mounted) {
+              setProfile(
+                profileData
+              );
+            }
+          } else {
+            setProfile(null);
+          }
+        } catch (error) {
+          console.error(
+            'Authentication initialization failed:',
+            error
           );
 
           if (mounted) {
-            setProfile(profileData);
+            setSession(null);
+            setUser(null);
+            setProfile(null);
           }
-        } else {
-          setProfile(null);
+        } finally {
+          if (mounted) {
+            setLoading(false);
+          }
         }
-      } catch (error) {
-        console.error('Authentication initialization failed:', error);
+      };
 
-        if (mounted) {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
+    void initializeAuth();
 
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
-        if (!mounted) return;
+      data: authListener,
+    } =
+      supabase.auth.onAuthStateChange(
+        (event, currentSession) => {
+          if (!mounted) {
+            return;
+          }
 
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+          /*
+           * Do not perform another Supabase request
+           * directly inside the auth callback.
+           *
+           * Updating React state here is safer and
+           * prevents auth-event loops.
+           */
 
-        if (currentSession?.user) {
-          const profileData = await fetchProfile(
-            currentSession.user.id
+          setSession(
+            currentSession ?? null
           );
 
-          if (mounted) {
-            setProfile(profileData);
-          }
-        } else {
-          setProfile(null);
-        }
+          setUser(
+            currentSession?.user ?? null
+          );
 
-        if (mounted) {
+          if (!currentSession?.user) {
+            setProfile(null);
+          }
+
           setLoading(false);
+
+          /*
+           * Profile loading is handled asynchronously
+           * outside the callback.
+           */
+          if (
+            currentSession?.user &&
+            (
+              event === 'SIGNED_IN' ||
+              event === 'INITIAL_SESSION' ||
+              event === 'TOKEN_REFRESHED' ||
+              event === 'USER_UPDATED'
+            )
+          ) {
+            void fetchProfile(
+              currentSession.user.id
+            ).then((profileData) => {
+              if (mounted) {
+                setProfile(
+                  profileData
+                );
+              }
+            });
+          }
         }
-      }
-    );
+      );
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, [fetchProfile]);
 
-  /**
-   * Sign in an existing user.
-   */
+  /* =======================================================
+     SIGN IN
+  ======================================================= */
+
   const signIn = async (
     email: string,
     password: string,
     _remember = true
-  ) => {
-    const cleanEmail = email.trim().toLowerCase();
+  ): Promise<void> => {
+    const cleanEmail =
+      email.trim().toLowerCase();
 
-    const { error } =
-      await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
+    if (!cleanEmail) {
+      throw new Error(
+        'Email address is required.'
+      );
+    }
 
-    if (error) {
-      throw new Error(getFriendlyError(error));
+    if (!password) {
+      throw new Error(
+        'Password is required.'
+      );
+    }
+
+    try {
+      const {
+        data,
+        error,
+      } =
+        await supabase.auth.signInWithPassword(
+          {
+            email: cleanEmail,
+            password,
+          }
+        );
+
+      if (error) {
+        throw new Error(
+          getAuthErrorMessage(error)
+        );
+      }
+
+      if (!data?.session) {
+        throw new Error(
+          'Login was not completed. Please check your email, password, and Supabase authentication settings.'
+        );
+      }
+
+      /*
+       * Explicitly synchronize local state.
+       * This makes login work even if the auth
+       * event arrives slightly later.
+       */
+      setSession(
+        data.session
+      );
+
+      setUser(
+        data.user ?? null
+      );
+
+      if (data.user) {
+        const profileData =
+          await fetchProfile(
+            data.user.id
+          );
+
+        setProfile(
+          profileData
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Sign in failed:',
+        error
+      );
+
+      if (
+        error instanceof Error
+      ) {
+        throw error;
+      }
+
+      throw new Error(
+        'Unable to sign in. Please try again.'
+      );
     }
   };
 
-  /**
-   * Create a new user account and corresponding profile.
-   */
+  /* =======================================================
+     SIGN UP
+  ======================================================= */
+
   const signUp = async (
     email: string,
     password: string,
     fullName: string,
     department: Department
-  ) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanName = fullName.trim();
+  ): Promise<void> => {
+    const cleanEmail =
+      email.trim().toLowerCase();
+
+    const cleanName =
+      fullName.trim();
 
     if (!cleanEmail) {
-      throw new Error('Email address is required.');
+      throw new Error(
+        'Email address is required.'
+      );
     }
 
     if (!cleanName) {
-      throw new Error('Full name is required.');
+      throw new Error(
+        'Full name is required.'
+      );
     }
 
     if (password.length < 6) {
@@ -237,47 +503,98 @@ export function AuthProvider({
     }
 
     if (!department) {
-      throw new Error('Please select a department.');
+      throw new Error(
+        'Please select a department.'
+      );
     }
 
-    const {
-      data: signUpData,
-      error: signUpError,
-    } = await supabase.auth.signUp({
-      email: cleanEmail,
-      password,
-      options: {
-        data: {
-          full_name: cleanName,
-          department,
-        },
-      },
-    });
+    try {
+      const {
+        data,
+        error,
+      } =
+        await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              full_name:
+                cleanName,
 
-    if (signUpError) {
-      throw new Error(getFriendlyError(signUpError));
-    }
+              department,
+            },
+          },
+        });
 
-    /**
-     * If Supabase immediately returns a user/session,
-     * create the profile now.
-     *
-     * If email confirmation is enabled, session may be null.
-     * In that case the database trigger should create the
-     * profile, or the profile can be created after confirmation.
-     */
-    if (signUpData.user) {
-      const { error: profileError } = await supabase
+      if (error) {
+        throw new Error(
+          getAuthErrorMessage(
+            error
+          )
+        );
+      }
+
+      if (!data?.user) {
+        throw new Error(
+          'Account creation failed. No user account was returned by Supabase.'
+        );
+      }
+
+      /*
+       * IMPORTANT:
+       *
+       * If Supabase email confirmation is disabled,
+       * data.session will exist immediately and the
+       * user can enter SOMS without checking email.
+       *
+       * If confirmation is enabled, Supabase returns
+       * a user but no session. The frontend cannot
+       * bypass that server-side setting.
+       */
+
+      if (data.session) {
+        setSession(
+          data.session
+        );
+
+        setUser(
+          data.user
+        );
+      }
+
+      /*
+       * Try to create/update the profile.
+       *
+       * This works immediately when a session exists
+       * and also works when a database trigger/RLS
+       * allows the profile operation.
+       */
+      const {
+        error: profileError,
+      } = await supabase
         .from('profiles')
         .upsert(
           {
-            id: signUpData.user.id,
-            email: cleanEmail,
-            full_name: cleanName,
+            id:
+              data.user.id,
+
+            email:
+              cleanEmail,
+
+            full_name:
+              cleanName,
+
             department,
-            role: 'user' as UserRole,
-            avatar_url: null,
-            is_active: true,
+
+            role:
+              'user' as UserRole,
+
+            avatar_url:
+              null,
+
+            is_active:
+              true,
+
             notification_preferences:
               DEFAULT_NOTIFICATION_PREFERENCES,
           },
@@ -287,79 +604,207 @@ export function AuthProvider({
         );
 
       if (profileError) {
-        console.error(
-          'Profile creation failed:',
+        /*
+         * Do not claim that account creation failed
+         * when only profile creation failed.
+         *
+         * A database trigger may already create the
+         * profile.
+         */
+        console.warn(
+          'Profile creation/upsert failed:',
           profileError
         );
+      }
 
+      /*
+       * If there is no session, email confirmation is
+       * still enabled in Supabase.
+       */
+      if (!data.session) {
         throw new Error(
-          'Your account was created, but your profile could not be created. Please contact an administrator.'
+          'Account created, but Supabase is requiring email confirmation before login. Disable "Confirm email" in Supabase Authentication settings if users should be able to log in immediately.'
         );
       }
-    }
-  };
 
-  /**
-   * Sign out the current user.
-   */
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
+      /*
+       * Fetch the final profile.
+       */
+      const profileData =
+        await fetchProfile(
+          data.user.id
+        );
 
-    if (error) {
-      throw new Error(getFriendlyError(error));
-    }
+      setProfile(
+        profileData
+      );
+    } catch (error) {
+      console.error(
+        'Sign up failed:',
+        error
+      );
 
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-  };
+      if (
+        error instanceof Error
+      ) {
+        throw error;
+      }
 
-  /**
-   * Update the current user's profile.
-   */
-  const updateProfile = async (
-    updates: Partial<Profile>
-  ) => {
-    if (!user) {
-      throw new Error('Not authenticated.');
-    }
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
-
-    if (error) {
-      throw new Error(getFriendlyError(error));
-    }
-
-    await refreshProfile();
-  };
-
-  /**
-   * Change the authenticated user's password.
-   */
-  const changePassword = async (
-    newPassword: string
-  ) => {
-    if (newPassword.length < 6) {
       throw new Error(
-        'Password must be at least 6 characters.'
+        'Unable to create your account.'
       );
     }
-
-    const { error } =
-      await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-    if (error) {
-      throw new Error(getFriendlyError(error));
-    }
   };
+
+  /* =======================================================
+     SIGN OUT
+  ======================================================= */
+
+  const signOut =
+    async (): Promise<void> => {
+      try {
+        const {
+          error,
+        } =
+          await supabase.auth.signOut();
+
+        if (error) {
+          throw new Error(
+            getAuthErrorMessage(
+              error
+            )
+          );
+        }
+
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+      } catch (error) {
+        console.error(
+          'Sign out failed:',
+          error
+        );
+
+        if (
+          error instanceof Error
+        ) {
+          throw error;
+        }
+
+        throw new Error(
+          'Unable to sign out.'
+        );
+      }
+    };
+
+  /* =======================================================
+     UPDATE PROFILE
+  ======================================================= */
+
+  const updateProfile =
+    async (
+      updates: Partial<Profile>
+    ): Promise<void> => {
+      if (!user) {
+        throw new Error(
+          'Not authenticated.'
+        );
+      }
+
+      /*
+       * Never allow the client to change the user's
+       * primary identity fields accidentally.
+       */
+      const safeUpdates = {
+        ...updates,
+        id: undefined,
+        created_at: undefined,
+        updated_at:
+          new Date().toISOString(),
+      };
+
+      delete (
+        safeUpdates as Partial<Profile>
+      ).id;
+
+      delete (
+        safeUpdates as Partial<Profile>
+      ).created_at;
+
+      const {
+        error,
+      } = await supabase
+        .from('profiles')
+        .update(
+          safeUpdates
+        )
+        .eq(
+          'id',
+          user.id
+        );
+
+      if (error) {
+        throw new Error(
+          getFriendlyError(
+            error
+          )
+        );
+      }
+
+      const profileData =
+        await fetchProfile(
+          user.id
+        );
+
+      setProfile(
+        profileData
+      );
+    };
+
+  /* =======================================================
+     CHANGE PASSWORD
+  ======================================================= */
+
+  const changePassword =
+    async (
+      newPassword: string
+    ): Promise<void> => {
+      if (!user) {
+        throw new Error(
+          'Not authenticated.'
+        );
+      }
+
+      if (
+        newPassword.length < 6
+      ) {
+        throw new Error(
+          'Password must be at least 6 characters.'
+        );
+      }
+
+      const {
+        error,
+      } =
+        await supabase.auth.updateUser(
+          {
+            password:
+              newPassword,
+          }
+        );
+
+      if (error) {
+        throw new Error(
+          getAuthErrorMessage(
+            error
+          )
+        );
+      }
+    };
+
+  /* =======================================================
+     PROVIDER
+  ======================================================= */
 
   return (
     <AuthContext.Provider
@@ -381,8 +826,13 @@ export function AuthProvider({
   );
 }
 
+/* =========================================================
+   USE AUTH
+========================================================= */
+
 export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(

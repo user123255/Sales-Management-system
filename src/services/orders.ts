@@ -14,7 +14,6 @@ import type {
 
 import { calculateOrderTotal } from '../lib/utils';
 
-
 /* =========================================================
    TYPES
 ========================================================= */
@@ -31,6 +30,12 @@ type OrderRealtimeDeleteCallback = (
   orderId: string
 ) => void;
 
+type UpdateOrderDetailsInput = {
+  department?: string;
+  customer_name?: string | null;
+  notes?: string | null;
+  delivery_info?: string | null;
+};
 
 /* =========================================================
    CONSTANTS
@@ -45,10 +50,17 @@ const ORDER_STATUSES: OrderStatus[] = [
   'cancelled',
 ];
 
+const BUTCHERY_DEPARTMENT = 'butchery';
 
 /* =========================================================
    HELPERS
 ========================================================= */
+
+function normalizeDepartment(
+  department?: string | null
+): string {
+  return department?.trim().toLowerCase() || '';
+}
 
 function isOrderStatus(
   value: unknown
@@ -61,22 +73,102 @@ function isOrderStatus(
   );
 }
 
-
 function cleanSearchValue(
   value: string
 ): string {
   return value
     .trim()
-    .replace(
-      /[%_,]/g,
-      ' '
-    )
-    .replace(
-      /\s+/g,
-      ' '
-    );
+    .replace(/[%_,]/g, ' ')
+    .replace(/\s+/g, ' ');
 }
 
+/* =========================================================
+   DEPARTMENT VISIBILITY
+========================================================= */
+
+/*
+ * SOMS ORDER VISIBILITY RULES
+ *
+ * BUTCHERY
+ * --------
+ * Butchery is the fulfilment department.
+ * It must see orders created by ALL departments.
+ *
+ * FINANCE
+ * -------
+ * Finance sees ONLY orders belonging to Finance.
+ *
+ * OTHER DEPARTMENTS
+ * -----------------
+ * Every other department sees ONLY its own orders.
+ *
+ * Therefore:
+ *
+ * Kitchen order
+ *   -> Kitchen: YES
+ *   -> Butchery: YES
+ *   -> Finance: NO
+ *   -> Catering: NO
+ *   -> Operations: NO
+ *
+ * Finance order
+ *   -> Finance: YES
+ *   -> Butchery: YES
+ *   -> Kitchen: NO
+ *   -> Catering: NO
+ *
+ * Catering order
+ *   -> Catering: YES
+ *   -> Butchery: YES
+ *   -> Finance: NO
+ *   -> Kitchen: NO
+ */
+function applyDepartmentVisibility<T>(
+  query: T,
+  department?: string
+): T {
+  const normalized =
+    normalizeDepartment(department);
+
+  if (!normalized) {
+    return query;
+  }
+
+  /*
+   * Butchery is the ONLY department
+   * allowed to see every department's orders.
+   */
+  if (
+    normalized === BUTCHERY_DEPARTMENT
+  ) {
+    return query;
+  }
+
+  /*
+   * Every other department is restricted
+   * to its own department.
+   */
+  return (
+    query as any
+  ).eq(
+    'department',
+    normalized
+  );
+}
+
+/* =========================================================
+   BUTCHERY PERMISSION
+========================================================= */
+
+function canAcceptOrders(
+  department?: string
+): boolean {
+  return (
+    normalizeDepartment(
+      department
+    ) === BUTCHERY_DEPARTMENT
+  );
+}
 
 /* =========================================================
    FETCH COMPLETE ORDER
@@ -127,22 +219,18 @@ async function fetchCompleteOrder(
     )
     .maybeSingle();
 
-
   if (error) {
     throw new Error(
       getFriendlyError(error)
     );
   }
 
-
   if (!data) {
     return null;
   }
 
-
   const order =
     data as Order;
-
 
   if (order.status_history) {
     order.status_history =
@@ -159,10 +247,8 @@ async function fetchCompleteOrder(
         );
   }
 
-
   return order;
 }
-
 
 /* =========================================================
    FETCH ORDERS
@@ -171,6 +257,11 @@ async function fetchCompleteOrder(
 export async function fetchOrders(
   filters?: FetchOrdersFilters
 ): Promise<Order[]> {
+  const requestedDepartment =
+    normalizeDepartment(
+      filters?.department
+    );
+
   let query =
     supabase
       .from('orders')
@@ -193,6 +284,19 @@ export async function fetchOrders(
         }
       );
 
+  /*
+   * IMPORTANT:
+   *
+   * Department filtering is applied BEFORE
+   * the query is executed.
+   */
+  if (requestedDepartment) {
+    query =
+      applyDepartmentVisibility(
+        query,
+        requestedDepartment
+      );
+  }
 
   if (filters?.status) {
     query =
@@ -202,16 +306,6 @@ export async function fetchOrders(
       );
   }
 
-
-  if (filters?.department) {
-    query =
-      query.eq(
-        'department',
-        filters.department
-      );
-  }
-
-
   if (filters?.dateFrom) {
     query =
       query.gte(
@@ -219,7 +313,6 @@ export async function fetchOrders(
         filters.dateFrom
       );
   }
-
 
   if (filters?.dateTo) {
     const dateTo =
@@ -233,7 +326,6 @@ export async function fetchOrders(
         dateTo
       );
   }
-
 
   if (filters?.search?.trim()) {
     const search =
@@ -251,13 +343,11 @@ export async function fetchOrders(
       );
   }
 
-
   const {
     data,
     error,
   } =
     await query;
-
 
   if (error) {
     throw new Error(
@@ -265,12 +355,10 @@ export async function fetchOrders(
     );
   }
 
-
   return (
     data || []
   ) as Order[];
 }
-
 
 /* =========================================================
    FETCH SINGLE ORDER
@@ -283,12 +371,10 @@ export async function fetchOrderById(
     return null;
   }
 
-
   return fetchCompleteOrder(
     id.trim()
   );
 }
-
 
 /* =========================================================
    FETCH ORDER BY NUMBER
@@ -300,7 +386,6 @@ export async function fetchOrderByNumber(
   if (!orderNumber?.trim()) {
     return null;
   }
-
 
   const {
     data,
@@ -320,9 +405,7 @@ export async function fetchOrderByNumber(
 
         items:order_items(*),
 
-        status_history:order_status_history(
-          *
-        )
+        status_history:order_status_history(*)
       `)
       .eq(
         'order_number',
@@ -330,23 +413,19 @@ export async function fetchOrderByNumber(
       )
       .maybeSingle();
 
-
   if (error) {
     throw new Error(
       getFriendlyError(error)
     );
   }
 
-
   return (
     data as Order
   ) || null;
 }
 
-
 /* =========================================================
    DELETE ORDER
-   NO APPLICATION-LEVEL RESTRICTIONS
 ========================================================= */
 
 export async function deleteOrder(
@@ -358,76 +437,41 @@ export async function deleteOrder(
     );
   }
 
-
   const id =
     orderId.trim();
-
 
   /*
    * Delete dependent records first.
    */
+  const childTables = [
+    'notifications',
+    'order_status_history',
+    'order_items',
+  ] as const;
 
-  const notificationResult =
-    await supabase
-      .from('notifications')
+  for (const table of childTables) {
+    const {
+      error,
+    } = await supabase
+      .from(table)
       .delete()
       .eq(
         'order_id',
         id
       );
 
-
-  if (notificationResult.error) {
-    throw new Error(
-      getFriendlyError(
-        notificationResult.error
-      )
-    );
-  }
-
-
-  const historyResult =
-    await supabase
-      .from('order_status_history')
-      .delete()
-      .eq(
-        'order_id',
-        id
+    if (error) {
+      throw new Error(
+        `Unable to delete order data from ${table}: ${getFriendlyError(
+          error
+        )}`
       );
-
-
-  if (historyResult.error) {
-    throw new Error(
-      getFriendlyError(
-        historyResult.error
-      )
-    );
+    }
   }
-
-
-  const itemsResult =
-    await supabase
-      .from('order_items')
-      .delete()
-      .eq(
-        'order_id',
-        id
-      );
-
-
-  if (itemsResult.error) {
-    throw new Error(
-      getFriendlyError(
-        itemsResult.error
-      )
-    );
-  }
-
 
   /*
    * Finally delete the order itself.
    */
-
   const {
     error,
   } =
@@ -439,14 +483,14 @@ export async function deleteOrder(
         id
       );
 
-
   if (error) {
     throw new Error(
-      getFriendlyError(error)
+      `Unable to permanently delete the order: ${getFriendlyError(
+        error
+      )}`
     );
   }
 }
-
 
 /* =========================================================
    UPDATE ORDER
@@ -462,7 +506,6 @@ export async function updateOrder(
     );
   }
 
-
   if (
     !input?.items ||
     input.items.length === 0
@@ -472,10 +515,8 @@ export async function updateOrder(
     );
   }
 
-
-  /*
-   * Validate items.
-   */
+  const id =
+    orderId.trim();
 
   for (const item of input.items) {
     if (!item.product_name?.trim()) {
@@ -484,41 +525,35 @@ export async function updateOrder(
       );
     }
 
+    const quantity =
+      Number(item.quantity);
+
+    const price =
+      Number(item.price);
 
     if (
-      !Number.isFinite(
-        Number(item.quantity)
-      ) ||
-      Number(item.quantity) <= 0
+      !Number.isFinite(quantity) ||
+      quantity <= 0
     ) {
       throw new Error(
-        `Invalid quantity for ${item.product_name}`
+        `Invalid quantity for ${item.product_name}.`
       );
     }
 
-
     if (
-      !Number.isFinite(
-        Number(item.price)
-      ) ||
-      Number(item.price) < 0
+      !Number.isFinite(price) ||
+      price < 0
     ) {
       throw new Error(
-        `Invalid price for ${item.product_name}`
+        `Invalid price for ${item.product_name}.`
       );
     }
   }
-
 
   const subtotal =
     calculateOrderTotal(
       input.items
     );
-
-
-  /*
-   * Update main order.
-   */
 
   const {
     error: updateError,
@@ -548,9 +583,8 @@ export async function updateOrder(
       })
       .eq(
         'id',
-        orderId
+        id
       );
-
 
   if (updateError) {
     throw new Error(
@@ -559,14 +593,6 @@ export async function updateOrder(
       )
     );
   }
-
-
-  /*
-   * Get existing items before replacing them.
-   *
-   * This allows us to preserve Butchery response
-   * information when the same item is edited.
-   */
 
   const {
     data: existingItems,
@@ -577,9 +603,8 @@ export async function updateOrder(
       .select('*')
       .eq(
         'order_id',
-        orderId
+        id
       );
-
 
   if (existingItemsError) {
     throw new Error(
@@ -589,11 +614,6 @@ export async function updateOrder(
     );
   }
 
-
-  /*
-   * Delete old items.
-   */
-
   const {
     error: deleteItemsError,
   } =
@@ -602,9 +622,8 @@ export async function updateOrder(
       .delete()
       .eq(
         'order_id',
-        orderId
+        id
       );
-
 
   if (deleteItemsError) {
     throw new Error(
@@ -614,19 +633,9 @@ export async function updateOrder(
     );
   }
 
-
-  /*
-   * Recreate items.
-   */
-
   const updatedItems =
     input.items.map(
       (item) => {
-        /*
-         * Try to find the previous item by
-         * product name.
-         */
-
         const previous =
           existingItems?.find(
             (existing) =>
@@ -638,10 +647,9 @@ export async function updateOrder(
                 .toLowerCase()
           );
 
-
         return {
           order_id:
-            orderId,
+            id,
 
           product_id:
             item.product_id ||
@@ -672,11 +680,6 @@ export async function updateOrder(
             item.notes?.trim() ||
             null,
 
-          /*
-           * Preserve existing Butchery information
-           * whenever the product still exists.
-           */
-
           available_quantity:
             previous?.available_quantity ??
             null,
@@ -704,7 +707,6 @@ export async function updateOrder(
       }
     );
 
-
   const {
     error: itemError,
   } =
@@ -714,7 +716,6 @@ export async function updateOrder(
         updatedItems
       );
 
-
   if (itemError) {
     throw new Error(
       getFriendlyError(
@@ -723,16 +724,10 @@ export async function updateOrder(
     );
   }
 
-
-  /*
-   * Return complete updated order.
-   */
-
   const updatedOrder =
     await fetchOrderById(
-      orderId
+      id
     );
-
 
   if (!updatedOrder) {
     throw new Error(
@@ -740,10 +735,126 @@ export async function updateOrder(
     );
   }
 
-
   return updatedOrder;
 }
 
+/* =========================================================
+   UPDATE ORDER DETAILS
+========================================================= */
+
+export async function updateOrderDetails(
+  orderId: string,
+  input: UpdateOrderDetailsInput,
+  userId: string
+): Promise<Order> {
+  if (!orderId?.trim()) {
+    throw new Error(
+      'Order ID is required.'
+    );
+  }
+
+  if (!userId?.trim()) {
+    throw new Error(
+      'You must be signed in to edit an order.'
+    );
+  }
+
+  const id =
+    orderId.trim();
+
+  const updates: Record<
+    string,
+    unknown
+  > = {
+    updated_at:
+      new Date().toISOString(),
+  };
+
+  if (
+    input.department !==
+    undefined
+  ) {
+    const department =
+      normalizeDepartment(
+        input.department
+      );
+
+    if (!department) {
+      throw new Error(
+        'Department is required.'
+      );
+    }
+
+    updates.department =
+      department;
+  }
+
+  if (
+    input.customer_name !==
+    undefined
+  ) {
+    updates.customer_name =
+      input.customer_name?.trim() ||
+      null;
+  }
+
+  if (
+    input.notes !==
+    undefined
+  ) {
+    updates.notes =
+      input.notes?.trim() ||
+      null;
+  }
+
+  if (
+    input.delivery_info !==
+    undefined
+  ) {
+    updates.delivery_info =
+      input.delivery_info?.trim() ||
+      null;
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('orders')
+      .update(updates)
+      .eq(
+        'id',
+        id
+      )
+      .select()
+      .single();
+
+  if (error) {
+    throw new Error(
+      getFriendlyError(error)
+    );
+  }
+
+  if (!data) {
+    throw new Error(
+      'Order not found.'
+    );
+  }
+
+  const updatedOrder =
+    await fetchOrderById(
+      id
+    );
+
+  if (!updatedOrder) {
+    throw new Error(
+      'Order was updated but could not be loaded.'
+    );
+  }
+
+  return updatedOrder;
+}
 
 /* =========================================================
    CREATE ORDER
@@ -754,19 +865,22 @@ export async function createOrder(
   userId: string,
   department: string
 ): Promise<Order> {
-  if (!userId) {
+  if (!userId?.trim()) {
     throw new Error(
       'You must login first.'
     );
   }
 
+  const cleanDepartment =
+    normalizeDepartment(
+      department
+    );
 
-  if (!department?.trim()) {
+  if (!cleanDepartment) {
     throw new Error(
       'Department is required.'
     );
   }
-
 
   if (
     !input?.items ||
@@ -777,16 +891,42 @@ export async function createOrder(
     );
   }
 
+  for (const item of input.items) {
+    if (!item.product_name?.trim()) {
+      throw new Error(
+        'Product name is required.'
+      );
+    }
+
+    const quantity =
+      Number(item.quantity);
+
+    const price =
+      Number(item.price);
+
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      throw new Error(
+        `Invalid quantity for ${item.product_name}.`
+      );
+    }
+
+    if (
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
+      throw new Error(
+        `Invalid price for ${item.product_name}.`
+      );
+    }
+  }
 
   const subtotal =
     calculateOrderTotal(
       input.items
     );
-
-
-  /*
-   * Generate order number.
-   */
 
   const {
     data: numberData,
@@ -796,7 +936,6 @@ export async function createOrder(
       'generate_order_number'
     );
 
-
   if (numberError) {
     console.warn(
       'Could not generate order number:',
@@ -804,15 +943,9 @@ export async function createOrder(
     );
   }
 
-
   const orderNumber =
     numberData ||
     `SOMS-${Date.now()}`;
-
-
-  /*
-   * Create order.
-   */
 
   const {
     data: order,
@@ -828,7 +961,7 @@ export async function createOrder(
           userId,
 
         department:
-          department.trim(),
+          cleanDepartment,
 
         status:
           'pending',
@@ -853,19 +986,11 @@ export async function createOrder(
       .select()
       .single();
 
-
   if (error || !order) {
     throw new Error(
-      getFriendlyError(
-        error
-      )
+      getFriendlyError(error)
     );
   }
-
-
-  /*
-   * Create order items.
-   */
 
   const items =
     input.items.map(
@@ -913,7 +1038,6 @@ export async function createOrder(
       })
     );
 
-
   const {
     error: itemError,
   } =
@@ -923,13 +1047,7 @@ export async function createOrder(
         items
       );
 
-
   if (itemError) {
-    /*
-     * Roll the order back if its items
-     * cannot be created.
-     */
-
     await supabase
       .from('orders')
       .delete()
@@ -938,7 +1056,6 @@ export async function createOrder(
         order.id
       );
 
-
     throw new Error(
       getFriendlyError(
         itemError
@@ -946,16 +1063,10 @@ export async function createOrder(
     );
   }
 
-
-  /*
-   * Load complete order.
-   */
-
   const result =
     await fetchOrderById(
       order.id
     );
-
 
   return (
     result ||
@@ -963,9 +1074,9 @@ export async function createOrder(
   );
 }
 
-
 /* =========================================================
    RESPOND TO ORDER ITEM
+   BUTCHERY ONLY
 ========================================================= */
 
 export async function respondToOrderItem(
@@ -974,21 +1085,30 @@ export async function respondToOrderItem(
   acceptedQuantity: number,
   responseStatus: OrderItemResponseStatus,
   note: string,
-  userId: string
+  userId: string,
+  department = BUTCHERY_DEPARTMENT
 ): Promise<void> {
-  if (!itemId) {
+  if (!itemId?.trim()) {
     throw new Error(
       'Order item is required.'
     );
   }
 
-
-  if (!userId) {
+  if (!userId?.trim()) {
     throw new Error(
       'User is required.'
     );
   }
 
+  if (
+    !canAcceptOrders(
+      department
+    )
+  ) {
+    throw new Error(
+      'Only Butchery can accept or respond to order items.'
+    );
+  }
 
   if (
     !Number.isFinite(
@@ -1001,7 +1121,6 @@ export async function respondToOrderItem(
     );
   }
 
-
   if (
     !Number.isFinite(
       Number(acceptedQuantity)
@@ -1013,7 +1132,6 @@ export async function respondToOrderItem(
     );
   }
 
-
   if (
     Number(acceptedQuantity) >
     Number(availableQuantity)
@@ -1022,7 +1140,6 @@ export async function respondToOrderItem(
       'Accepted quantity cannot be greater than available quantity.'
     );
   }
-
 
   const {
     error,
@@ -1055,9 +1172,8 @@ export async function respondToOrderItem(
       })
       .eq(
         'id',
-        itemId
+        itemId.trim()
       );
-
 
   if (error) {
     throw new Error(
@@ -1065,7 +1181,6 @@ export async function respondToOrderItem(
     );
   }
 }
-
 
 /* =========================================================
    UPDATE ORDER STATUS
@@ -1078,19 +1193,17 @@ export async function updateOrderStatus(
   department: string,
   comment?: string
 ): Promise<void> {
-  if (!orderId) {
+  if (!orderId?.trim()) {
     throw new Error(
       'Order ID required.'
     );
   }
 
-
-  if (!userId) {
+  if (!userId?.trim()) {
     throw new Error(
       'User ID required.'
     );
   }
-
 
   if (!isOrderStatus(status)) {
     throw new Error(
@@ -1098,10 +1211,32 @@ export async function updateOrderStatus(
     );
   }
 
+  const cleanDepartment =
+    normalizeDepartment(
+      department
+    );
 
   /*
-   * Get current order.
+   * Only Butchery can control
+   * fulfilment statuses.
    */
+  if (
+    (
+      status === 'accepted' ||
+      status === 'processing' ||
+      status === 'ready'
+    ) &&
+    !canAcceptOrders(
+      cleanDepartment
+    )
+  ) {
+    throw new Error(
+      'Only Butchery can update this fulfilment status.'
+    );
+  }
+
+  const id =
+    orderId.trim();
 
   const {
     data: current,
@@ -1116,10 +1251,9 @@ export async function updateOrderStatus(
       `)
       .eq(
         'id',
-        orderId
+        id
       )
       .single();
-
 
   if (error || !current) {
     throw new Error(
@@ -1127,14 +1261,8 @@ export async function updateOrderStatus(
     );
   }
 
-
   const now =
     new Date().toISOString();
-
-
-  /*
-   * Update order.
-   */
 
   const {
     error: updateError,
@@ -1154,9 +1282,8 @@ export async function updateOrderStatus(
       })
       .eq(
         'id',
-        orderId
+        id
       );
-
 
   if (updateError) {
     throw new Error(
@@ -1166,11 +1293,6 @@ export async function updateOrderStatus(
     );
   }
 
-
-  /*
-   * Add status history.
-   */
-
   const {
     error: historyError,
   } =
@@ -1178,7 +1300,7 @@ export async function updateOrderStatus(
       .from('order_status_history')
       .insert({
         order_id:
-          orderId,
+          id,
 
         status,
 
@@ -1186,7 +1308,7 @@ export async function updateOrderStatus(
           userId,
 
         department:
-          department ||
+          cleanDepartment ||
           null,
 
         comment:
@@ -1194,18 +1316,12 @@ export async function updateOrderStatus(
           null,
       });
 
-
   if (historyError) {
     console.error(
       'Order status history failed:',
       historyError
     );
   }
-
-
-  /*
-   * Notify the person who created the order.
-   */
 
   if (current.created_by) {
     const {
@@ -1227,9 +1343,8 @@ export async function updateOrderStatus(
             `Order #${current.order_number} is now ${status}.`,
 
           order_id:
-            orderId,
+            id,
         });
-
 
     if (notificationError) {
       console.error(
@@ -1240,9 +1355,8 @@ export async function updateOrderStatus(
   }
 }
 
-
 /* =========================================================
-   QUICK STATUS ACTIONS
+   ACCEPT ORDER
 ========================================================= */
 
 export async function acceptOrder(
@@ -1250,42 +1364,77 @@ export async function acceptOrder(
   userId: string,
   department: string
 ): Promise<void> {
+  if (
+    !canAcceptOrders(
+      department
+    )
+  ) {
+    throw new Error(
+      'Only Butchery can accept orders.'
+    );
+  }
+
   return updateOrderStatus(
     orderId,
     'accepted',
     userId,
-    department
+    BUTCHERY_DEPARTMENT
   );
 }
 
+/* =========================================================
+   START PROCESSING
+========================================================= */
 
 export async function startOrderProcessing(
   orderId: string,
   userId: string,
   department: string
 ): Promise<void> {
+  if (
+    !canAcceptOrders(
+      department
+    )
+  ) {
+    throw new Error(
+      'Only Butchery can process orders.'
+    );
+  }
+
   return updateOrderStatus(
     orderId,
     'processing',
     userId,
-    department
+    BUTCHERY_DEPARTMENT
   );
 }
 
+/* =========================================================
+   MARK READY
+========================================================= */
 
 export async function markOrderReady(
   orderId: string,
   userId: string,
   department: string
 ): Promise<void> {
+  if (
+    !canAcceptOrders(
+      department
+    )
+  ) {
+    throw new Error(
+      'Only Butchery can mark orders as ready.'
+    );
+  }
+
   return updateOrderStatus(
     orderId,
     'ready',
     userId,
-    department
+    BUTCHERY_DEPARTMENT
   );
 }
-
 
 /* =========================================================
    ORDER STATISTICS
@@ -1294,30 +1443,25 @@ export async function markOrderReady(
 export async function getOrderStats(
   department?: string
 ) {
+  const normalized =
+    normalizeDepartment(
+      department
+    );
+
   let query =
     supabase
       .from('orders')
       .select(
-        'status,total,created_at,completed_at'
+        'status,total,created_at,completed_at,department'
       );
 
-
-  /*
-   * Only filter by department when a specific
-   * department is actually requested.
-   *
-   * Butchery calls this without a department because
-   * it processes orders created by many departments.
-   */
-
-  if (department?.trim()) {
+  if (normalized) {
     query =
-      query.eq(
-        'department',
-        department
+      applyDepartmentVisibility(
+        query,
+        normalized
       );
   }
-
 
   const {
     data,
@@ -1325,21 +1469,17 @@ export async function getOrderStats(
   } =
     await query;
 
-
   if (error) {
     throw new Error(
       getFriendlyError(error)
     );
   }
 
-
   const orders =
     data || [];
 
-
   const now =
     new Date();
-
 
   const startOfToday =
     new Date(
@@ -1348,14 +1488,12 @@ export async function getOrderStats(
       now.getDate()
     );
 
-
   const endOfToday =
     new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate() + 1
     );
-
 
   const ordersToday =
     orders.filter(
@@ -1366,12 +1504,13 @@ export async function getOrderStats(
           );
 
         return (
-          created >= startOfToday &&
-          created < endOfToday
+          created >=
+            startOfToday &&
+          created <
+            endOfToday
         );
       }
     );
-
 
   const completedToday =
     orders.filter(
@@ -1383,7 +1522,6 @@ export async function getOrderStats(
           return false;
         }
 
-
         const completedDate =
           order.completed_at
             ? new Date(
@@ -1392,7 +1530,6 @@ export async function getOrderStats(
             : new Date(
                 order.created_at
               );
-
 
         return (
           completedDate >=
@@ -1403,7 +1540,6 @@ export async function getOrderStats(
       }
     );
 
-
   return {
     ordersToday:
       ordersToday.length,
@@ -1413,6 +1549,13 @@ export async function getOrderStats(
         (o) =>
           o.status ===
           'pending'
+      ).length,
+
+    accepted:
+      orders.filter(
+        (o) =>
+          o.status ===
+          'accepted'
       ).length,
 
     processing:
@@ -1429,13 +1572,6 @@ export async function getOrderStats(
           'ready'
       ).length,
 
-    accepted:
-      orders.filter(
-        (o) =>
-          o.status ===
-          'accepted'
-      ).length,
-
     completed:
       orders.filter(
         (o) =>
@@ -1445,6 +1581,13 @@ export async function getOrderStats(
 
     completedToday:
       completedToday.length,
+
+    cancelled:
+      orders.filter(
+        (o) =>
+          o.status ===
+          'cancelled'
+      ).length,
 
     totalSales:
       orders.reduce(
@@ -1458,7 +1601,6 @@ export async function getOrderStats(
   };
 }
 
-
 /* =========================================================
    REALTIME ORDERS
 ========================================================= */
@@ -1467,7 +1609,6 @@ export function subscribeToOrders(
   callback: (
     order: Order
   ) => void,
-
   onDelete?: OrderRealtimeDeleteCallback
 ) {
   const channel =
@@ -1477,7 +1618,6 @@ export function subscribeToOrders(
           .toString(36)
           .slice(2)}`
       )
-
       .on(
         'postgres_changes',
         {
@@ -1485,12 +1625,7 @@ export function subscribeToOrders(
           schema: 'public',
           table: 'orders',
         },
-
         async (payload) => {
-          /*
-           * DELETE
-           */
-
           if (
             payload.eventType ===
             'DELETE'
@@ -1500,32 +1635,23 @@ export function subscribeToOrders(
                 id?: string;
               };
 
-
             if (old?.id) {
               onDelete?.(
                 old.id
               );
             }
 
-
             return;
           }
-
-
-          /*
-           * INSERT / UPDATE
-           */
 
           const record =
             payload.new as {
               id?: string;
             };
 
-
           if (!record?.id) {
             return;
           }
-
 
           try {
             const order =
@@ -1533,11 +1659,9 @@ export function subscribeToOrders(
                 record.id
               );
 
-
             if (order) {
               callback(order);
             }
-
           } catch (error) {
             console.error(
               'Realtime order refresh failed:',
@@ -1546,9 +1670,7 @@ export function subscribeToOrders(
           }
         }
       )
-
       .subscribe();
-
 
   return () => {
     void supabase.removeChannel(
@@ -1556,7 +1678,6 @@ export function subscribeToOrders(
     );
   };
 }
-
 
 /* =========================================================
    REALTIME ORDER ITEMS
@@ -1586,14 +1707,12 @@ export function subscribeToOrderItems(
       )
       .subscribe();
 
-
   return () => {
     void supabase.removeChannel(
       channel
     );
   };
 }
-
 
 /* =========================================================
    REALTIME STATUS HISTORY
@@ -1628,14 +1747,12 @@ export function subscribeToOrderStatus(
       )
       .subscribe();
 
-
   return () => {
     void supabase.removeChannel(
       channel
     );
   };
 }
-
 
 /* =========================================================
    EXPORT TYPES

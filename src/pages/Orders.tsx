@@ -22,114 +22,14 @@ import {
   deleteOrder,
   fetchOrders,
   subscribeToOrders,
+  updateOrderDetails,
 } from '../services/orders';
-
-import { supabase } from '../lib/supabase';
 
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { StatusBadge } from '../components/StatusBadge';
 import { EmptyState } from '../components/EmptyState';
 
 import type { OrderStatus } from '../types/database';
-
-/* =========================================================
-   UPDATE ORDER
-========================================================= */
-
-type UpdateOrderInput = {
-  department?: string;
-  customer_name?: string | null;
-  notes?: string | null;
-  delivery_info?: string | null;
-};
-
-export async function updateOrder(
-  orderId: string,
-  input: UpdateOrderInput,
-  userId: string
-): Promise<OrderRecord> {
-  if (!orderId?.trim()) {
-    throw new Error(
-      'Order ID is required.'
-    );
-  }
-
-  if (!userId?.trim()) {
-    throw new Error(
-      'You must be signed in to edit an order.'
-    );
-  }
-
-  const cleanedOrderId =
-    orderId.trim();
-
-  if (
-    input.department !== undefined &&
-    !input.department.trim()
-  ) {
-    throw new Error(
-      'Department is required.'
-    );
-  }
-
-  const updates: Record<
-    string,
-    unknown
-  > = {
-    updated_at:
-      new Date().toISOString(),
-  };
-
-  if (
-    input.department !== undefined
-  ) {
-    updates.department =
-      input.department.trim();
-  }
-
-  if (
-    input.customer_name !==
-    undefined
-  ) {
-    updates.customer_name =
-      input.customer_name?.trim() ||
-      null;
-  }
-
-  if (
-    input.notes !== undefined
-  ) {
-    updates.notes =
-      input.notes?.trim() ||
-      null;
-  }
-
-  if (
-    input.delivery_info !==
-    undefined
-  ) {
-    updates.delivery_info =
-      input.delivery_info?.trim() ||
-      null;
-  }
-
-  const { data: updatedOrder, error: updateError } = await supabase
-    .from('orders')
-    .update(updates)
-    .eq('id', cleanedOrderId)
-    .select()
-    .single();
-
-  if (updateError) {
-    throw new Error(updateError.message);
-  }
-
-  if (!updatedOrder) {
-    throw new Error('Order not found.');
-  }
-
-  return updatedOrder as OrderRecord;
-}
 
 /* =========================================================
    TYPES
@@ -155,26 +55,20 @@ export default function Orders() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  const [orders, setOrders] =
-    useState<OrderRecord[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [search, setSearch] =
-    useState('');
+  const [search, setSearch] = useState('');
 
-  const [status, setStatus] =
-    useState('');
+  const [status, setStatus] = useState('');
 
-  const [error, setError] =
-    useState('');
+  const [error, setError] = useState('');
 
   /* =======================================================
-     DELETE
+     DELETE STATE
   ======================================================= */
 
   const [deleteTarget, setDeleteTarget] =
@@ -184,7 +78,7 @@ export default function Orders() {
     useState<string | null>(null);
 
   /* =======================================================
-     EDIT
+     EDIT STATE
   ======================================================= */
 
   const [editTarget, setEditTarget] =
@@ -209,109 +103,96 @@ export default function Orders() {
      LOAD ORDERS
   ======================================================= */
 
-  const loadOrders = useCallback(
-    async () => {
-      try {
-        setLoading(true);
-        setError('');
+  const loadOrders = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        const data =
-          await fetchOrders({
-            search:
-              search.trim() ||
-              undefined,
+      const data = await fetchOrders({
+        search:
+          search.trim() || undefined,
 
-            status:
-              status
-                ? (status as OrderStatus)
-                : undefined,
-          });
+        status:
+          status
+            ? (status as OrderStatus)
+            : undefined,
+      });
 
-        setOrders(
-          data as OrderRecord[]
-        );
-      } catch (err) {
-        console.error(
-          'Unable to load orders:',
-          err
-        );
+      setOrders(data as OrderRecord[]);
+    } catch (err) {
+      console.error(
+        'Unable to load orders:',
+        err
+      );
 
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Unable to load orders.'
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [search, status]
-  );
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to load orders.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [search, status]);
 
   /* =======================================================
      LOAD WHEN FILTERS CHANGE
   ======================================================= */
 
   useEffect(() => {
-    const timer =
-      window.setTimeout(() => {
-        void loadOrders();
-      }, 250);
+    const timer = window.setTimeout(() => {
+      void loadOrders();
+    }, 250);
 
-    return () =>
+    return () => {
       window.clearTimeout(timer);
+    };
   }, [loadOrders]);
 
   /* =======================================================
-     REALTIME
+     REALTIME ORDERS
   ======================================================= */
 
   useEffect(() => {
-    const unsubscribe =
-      subscribeToOrders(
-        (incomingOrder) => {
-          const order =
-            incomingOrder as OrderRecord;
+    const unsubscribe = subscribeToOrders(
+      (incomingOrder) => {
+        const order =
+          incomingOrder as OrderRecord;
 
-          setOrders(
-            (current) => {
-              const exists =
-                current.some(
-                  (item) =>
-                    item.id === order.id
-                );
-
-              if (exists) {
-                return current.map(
-                  (item) =>
-                    item.id === order.id
-                      ? {
-                          ...item,
-                          ...order,
-                        }
-                      : item
-                );
-              }
-
-              return [
-                order,
-                ...current,
-              ];
-            }
+        setOrders((current) => {
+          const exists = current.some(
+            (item) =>
+              item.id === order.id
           );
-        },
 
-        (deletedOrderId) => {
-          setOrders(
-            (current) =>
-              current.filter(
-                (order) =>
-                  order.id !==
-                  deletedOrderId
-              )
-          );
-        }
-      );
+          if (exists) {
+            return current.map((item) =>
+              item.id === order.id
+                ? {
+                    ...item,
+                    ...order,
+                  }
+                : item
+            );
+          }
+
+          return [
+            order,
+            ...current,
+          ];
+        });
+      },
+
+      (deletedOrderId) => {
+        setOrders((current) =>
+          current.filter(
+            (order) =>
+              order.id !==
+              deletedOrderId
+          )
+        );
+      }
+    );
 
     return () => {
       unsubscribe();
@@ -336,9 +217,7 @@ export default function Orders() {
      OPEN EDIT
   ======================================================= */
 
-  function openEdit(
-    order: OrderRecord
-  ) {
+  function openEdit(order: OrderRecord) {
     setError('');
 
     setEditTarget(order);
@@ -402,7 +281,7 @@ export default function Orders() {
 
     try {
       const updated =
-        await updateOrder(
+        await updateOrderDetails(
           editTarget.id,
           {
             department:
@@ -423,17 +302,15 @@ export default function Orders() {
           profile.id
         );
 
-      setOrders(
-        (current) =>
-          current.map(
-            (order) =>
-              order.id === updated.id
-                ? {
-                    ...order,
-                    ...(updated as OrderRecord),
-                  }
-                : order
-          )
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === updated.id
+            ? {
+                ...order,
+                ...(updated as OrderRecord),
+              }
+            : order
+        )
       );
 
       setEditTarget(null);
@@ -457,9 +334,7 @@ export default function Orders() {
      OPEN DELETE
   ======================================================= */
 
-  function openDelete(
-    order: OrderRecord
-  ) {
+  function openDelete(order: OrderRecord) {
     setError('');
     setDeleteTarget(order);
   }
@@ -495,8 +370,7 @@ export default function Orders() {
       return;
     }
 
-    const orderId =
-      deleteTarget.id;
+    const orderId = deleteTarget.id;
 
     setDeletingId(orderId);
     setError('');
@@ -504,12 +378,11 @@ export default function Orders() {
     try {
       await deleteOrder(orderId);
 
-      setOrders(
-        (current) =>
-          current.filter(
-            (order) =>
-              order.id !== orderId
-          )
+      setOrders((current) =>
+        current.filter(
+          (order) =>
+            order.id !== orderId
+        )
       );
 
       setDeleteTarget(null);
@@ -562,9 +435,7 @@ export default function Orders() {
 
         <button
           type="button"
-          onClick={() =>
-            void refresh()
-          }
+          onClick={() => void refresh()}
           disabled={refreshing}
           className="soms-button soms-button-secondary"
         >
@@ -593,6 +464,7 @@ export default function Orders() {
           />
 
           <div className="flex-1">
+
             <p className="font-semibold">
               Action failed
             </p>
@@ -600,13 +472,13 @@ export default function Orders() {
             <p className="mt-1">
               {error}
             </p>
+
           </div>
 
           <button
             type="button"
-            onClick={() =>
-              setError('')
-            }
+            onClick={() => setError('')}
+            className="rounded-lg p-1 hover:bg-red-100"
           >
             <X size={17} />
           </button>
@@ -713,140 +585,134 @@ export default function Orders() {
 
             <tbody>
 
-              {orders.map(
-                (order) => {
+              {orders.map((order) => {
 
-                  const deleting =
-                    deletingId ===
-                    order.id;
+                const deleting =
+                  deletingId ===
+                  order.id;
 
-                  return (
-                    <tr
-                      key={order.id}
-                    >
+                return (
+                  <tr
+                    key={order.id}
+                  >
 
-                      <td>
-                        <strong className="text-slate-900">
-                          #
-                          {
-                            order.order_number
-                          }
-                        </strong>
-                      </td>
-
-                      <td>
+                    <td>
+                      <strong className="text-slate-900">
+                        #
                         {
-                          order.department
+                          order.order_number
                         }
-                      </td>
+                      </strong>
+                    </td>
 
-                      <td>
+                    <td>
+                      {order.department}
+                    </td>
+
+                    <td>
+                      {
+                        order.customer_name ||
+                        '—'
+                      }
+                    </td>
+
+                    <td>
+                      {Number(
+                        order.total || 0
+                      ).toLocaleString(
+                        undefined,
                         {
-                          order.customer_name ||
-                          '—'
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         }
-                      </td>
+                      )}
+                    </td>
 
-                      <td>
-                        {Number(
-                          order.total || 0
-                        ).toLocaleString(
-                          undefined,
-                          {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
+                    <td>
+                      <StatusBadge
+                        status={
+                          order.status
+                        }
+                      />
+                    </td>
+
+                    <td>
+                      {new Date(
+                        order.created_at
+                      ).toLocaleDateString()}
+                    </td>
+
+                    <td>
+
+                      <div className="flex flex-wrap gap-2">
+
+                        {/* VIEW */}
+
+                        <button
+                          type="button"
+                          disabled={deleting}
+                          onClick={() =>
+                            navigate(
+                              `/orders/${order.id}`
+                            )
                           }
-                        )}
-                      </td>
+                          className="soms-button soms-button-secondary"
+                        >
+                          <Eye size={15} />
+                          View
+                        </button>
 
-                      <td>
-                        <StatusBadge
-                          status={
-                            order.status
+                        {/* EDIT */}
+
+                        <button
+                          type="button"
+                          disabled={
+                            deleting ||
+                            deletingId !== null
                           }
-                        />
-                      </td>
+                          onClick={() =>
+                            openEdit(order)
+                          }
+                          className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Edit3 size={15} />
+                          Edit
+                        </button>
 
-                      <td>
-                        {new Date(
-                          order.created_at
-                        ).toLocaleDateString()}
-                      </td>
+                        {/* DELETE */}
 
-                      <td>
+                        <button
+                          type="button"
+                          disabled={
+                            deleting ||
+                            deletingId !== null
+                          }
+                          onClick={() =>
+                            openDelete(order)
+                          }
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deleting ? (
+                            <RefreshCw
+                              size={15}
+                              className="animate-spin"
+                            />
+                          ) : (
+                            <Trash2 size={15} />
+                          )}
 
-                        <div className="flex flex-wrap gap-2">
+                          {deleting
+                            ? 'Deleting...'
+                            : 'Delete'}
+                        </button>
 
-                          {/* VIEW */}
+                      </div>
 
-                          <button
-                            type="button"
-                            disabled={
-                              deleting
-                            }
-                            onClick={() =>
-                              navigate(
-                                `/orders/${order.id}`
-                              )
-                            }
-                            className="soms-button soms-button-secondary"
-                          >
-                            <Eye size={15} />
-                            View
-                          </button>
+                    </td>
 
-                          {/* EDIT */}
-
-                          <button
-                            type="button"
-                            disabled={
-                              deleting ||
-                              deletingId !== null
-                            }
-                            onClick={() =>
-                              openEdit(order)
-                            }
-                            className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Edit3 size={15} />
-                            Edit
-                          </button>
-
-                          {/* DELETE */}
-
-                          <button
-                            type="button"
-                            disabled={
-                              deleting ||
-                              deletingId !== null
-                            }
-                            onClick={() =>
-                              openDelete(order)
-                            }
-                            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {deleting ? (
-                              <RefreshCw
-                                size={15}
-                                className="animate-spin"
-                              />
-                            ) : (
-                              <Trash2 size={15} />
-                            )}
-
-                            {deleting
-                              ? 'Deleting...'
-                              : 'Delete'}
-                          </button>
-
-                        </div>
-
-                      </td>
-
-                    </tr>
-                  );
-                }
-              )}
+                  </tr>
+                );
+              })}
 
             </tbody>
 
@@ -868,6 +734,7 @@ export default function Orders() {
             <div className="flex items-center justify-between border-b border-slate-200 p-6">
 
               <div>
+
                 <h2 className="text-xl font-bold text-slate-900">
                   Edit Order
                 </h2>
@@ -878,13 +745,14 @@ export default function Orders() {
                     editTarget.order_number
                   }
                 </p>
+
               </div>
 
               <button
                 type="button"
                 onClick={closeEdit}
                 disabled={savingEdit}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
               >
                 <X size={20} />
               </button>
@@ -893,12 +761,15 @@ export default function Orders() {
 
             <div className="space-y-5 p-6">
 
+              {/* DEPARTMENT */}
+
               <div>
+
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Department
                 </label>
 
-                <input
+                <select
                   value={editDepartment}
                   onChange={(event) =>
                     setEditDepartment(
@@ -906,11 +777,30 @@ export default function Orders() {
                     )
                   }
                   className="soms-input w-full"
-                  placeholder="Department"
-                />
+                >
+                  <option value="">
+                    Select department
+                  </option>
+
+                  <option value="finance">
+                    Finance
+                  </option>
+
+                  <option value="butchery">
+                    Butchery
+                  </option>
+
+                  <option value="other">
+                    Other
+                  </option>
+                </select>
+
               </div>
 
+              {/* CUSTOMER */}
+
               <div>
+
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Customer
                 </label>
@@ -925,9 +815,13 @@ export default function Orders() {
                   className="soms-input w-full"
                   placeholder="Customer name"
                 />
+
               </div>
 
+              {/* DELIVERY */}
+
               <div>
+
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Delivery Information
                 </label>
@@ -942,9 +836,13 @@ export default function Orders() {
                   className="soms-input w-full"
                   placeholder="Delivery information"
                 />
+
               </div>
 
+              {/* NOTES */}
+
               <div>
+
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Notes
                 </label>
@@ -960,6 +858,7 @@ export default function Orders() {
                   className="soms-input w-full resize-none"
                   placeholder="Order notes..."
                 />
+
               </div>
 
             </div>
@@ -970,7 +869,7 @@ export default function Orders() {
                 type="button"
                 onClick={closeEdit}
                 disabled={savingEdit}
-                className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -983,6 +882,7 @@ export default function Orders() {
                 disabled={savingEdit}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
               >
+
                 {savingEdit && (
                   <RefreshCw
                     size={16}
@@ -993,6 +893,7 @@ export default function Orders() {
                 {savingEdit
                   ? 'Saving...'
                   : 'Save Changes'}
+
               </button>
 
             </div>
@@ -1026,6 +927,7 @@ export default function Orders() {
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   Are you sure you want to permanently
                   delete
+
                   <strong className="mx-1 text-slate-900">
                     #
                     {

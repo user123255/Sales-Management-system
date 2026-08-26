@@ -6,7 +6,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Trash2,
   X,
   XCircle,
 } from 'lucide-react';
@@ -36,13 +35,6 @@ type Product = {
   created_at?: string;
 };
 
-type ProductForm = {
-  name: string;
-  category: string;
-  unit: string;
-  is_active: boolean;
-};
-
 /* =========================================================
    CONSTANTS
 ========================================================= */
@@ -55,26 +47,11 @@ const CATEGORIES = [
 ];
 
 const UNITS = [
-  {
-    value: 'kg',
-    label: 'Kilogram (kg)',
-  },
-  {
-    value: 'piece',
-    label: 'Piece',
-  },
-  {
-    value: 'unit',
-    label: 'Unit',
-  },
-  {
-    value: 'litre',
-    label: 'Litre (L)',
-  },
-  {
-    value: 'pack',
-    label: 'Pack',
-  },
+  { value: 'kg', label: 'Kilogram (kg)' },
+  { value: 'piece', label: 'Piece' },
+  { value: 'unit', label: 'Unit' },
+  { value: 'litre', label: 'Litre (L)' },
+  { value: 'pack', label: 'Pack' },
 ];
 
 /* =========================================================
@@ -94,49 +71,23 @@ function ProductModal({
   onClose,
   onSaved,
 }: ProductModalProps) {
-  const [name, setName] =
-    useState('');
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('BEEF CUTS');
+  const [unit, setUnit] = useState('kg');
+  const [isActive, setIsActive] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [category, setCategory] =
-    useState('BEEF CUTS');
-
-  const [unit, setUnit] =
-    useState('kg');
-
-  const [isActive, setIsActive] =
-    useState(true);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  const isEditing =
-    Boolean(product);
+  const isEditing = Boolean(product);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
 
     if (product) {
-      setName(
-        product.name || ''
-      );
-
-      setCategory(
-        product.category ||
-          'BEEF CUTS'
-      );
-
-      setUnit(
-        product.unit || 'kg'
-      );
-
-      setIsActive(
-        product.is_active !== false
-      );
+      setName(product.name || '');
+      setCategory(product.category || 'BEEF CUTS');
+      setUnit(product.unit || 'kg');
+      setIsActive(product.is_active !== false);
     } else {
       setName('');
       setCategory('BEEF CUTS');
@@ -147,36 +98,27 @@ function ProductModal({
     setError(null);
   }, [open, product]);
 
-  if (!open) {
-    return null;
-  }
+  if (!open) return null;
 
   const handleSubmit = async (
-    event: React.FormEvent
+    event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
-    const trimmedName =
-      name.trim();
+    const trimmedName = name.trim();
 
     if (!trimmedName) {
-      setError(
-        'Please enter a product name.'
-      );
+      setError('Please enter a product name.');
       return;
     }
 
     if (!category) {
-      setError(
-        'Please select a category.'
-      );
+      setError('Please select a category.');
       return;
     }
 
     if (!unit) {
-      setError(
-        'Please select a unit.'
-      );
+      setError('Please select a unit.');
       return;
     }
 
@@ -184,10 +126,12 @@ function ProductModal({
       setSaving(true);
       setError(null);
 
+      /* =====================================================
+         EDIT PRODUCT
+      ===================================================== */
+
       if (isEditing && product) {
-        const {
-          error: updateError,
-        } = await supabase
+        const { error: updateError } = await supabase
           .from('products')
           .update({
             name: trimmedName,
@@ -195,40 +139,38 @@ function ProductModal({
             unit,
             is_active: isActive,
           })
-          .eq(
-            'id',
-            product.id
-          );
+          .eq('id', product.id);
 
         if (updateError) {
           throw new Error(
-            getFriendlyError(
-              updateError
-            )
+            getFriendlyError(updateError),
           );
         }
 
-        const {
-          error: inventoryError,
-        } = await supabase
+        /*
+         * Keep inventory unit synchronized.
+         */
+        const { error: inventoryError } = await supabase
           .from('inventory')
           .update({
             unit,
-            updated_at:
-              new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
-          .eq(
-            'product_id',
-            product.id
-          );
+          .eq('product_id', product.id);
 
         if (inventoryError) {
           console.warn(
-            'Product updated, but inventory unit could not be synchronized:',
-            inventoryError
+            'Inventory unit synchronization failed:',
+            inventoryError,
           );
         }
-      } else {
+      }
+
+      /* =====================================================
+         CREATE PRODUCT
+      ===================================================== */
+
+      else {
         const {
           data: newProduct,
           error: productError,
@@ -241,48 +183,54 @@ function ProductModal({
             is_active: isActive,
           })
           .select(
-            'id, name, category, unit, is_active'
+            'id, name, category, unit, is_active',
           )
           .single();
 
         if (productError) {
           throw new Error(
-            getFriendlyError(
-              productError
-            )
+            getFriendlyError(productError),
           );
         }
 
         if (!newProduct?.id) {
           throw new Error(
-            'Product was created, but its ID could not be found.'
+            'Product was created, but its ID could not be found.',
           );
         }
 
-        const {
-          error: inventoryError,
-        } = await supabase
+        /*
+         * Create initial inventory record.
+         */
+        const { error: inventoryError } = await supabase
           .from('inventory')
           .insert({
-            product_id:
-              newProduct.id,
+            product_id: newProduct.id,
             quantity: 0,
             unit,
             low_stock_threshold: 5,
-            updated_at:
-              new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           });
 
         if (inventoryError) {
-          console.warn(
-            'Product created, but inventory record could not be created:',
-            inventoryError
+          console.error(
+            'Inventory initialization failed:',
+            inventoryError,
           );
 
+          /*
+           * Roll back product creation if inventory
+           * initialization fails.
+           */
+          await supabase
+            .from('products')
+            .delete()
+            .eq('id', newProduct.id);
+
           throw new Error(
-            `Product was created, but inventory could not be initialized. ${getFriendlyError(
-              inventoryError
-            )}`
+            `Product could not be initialized in inventory. ${getFriendlyError(
+              inventoryError,
+            )}`,
           );
         }
       }
@@ -292,13 +240,13 @@ function ProductModal({
     } catch (err) {
       console.error(
         'Unable to save product:',
-        err
+        err,
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : 'Unable to save product.'
+          : 'Unable to save product.',
       );
     } finally {
       setSaving(false);
@@ -308,6 +256,8 @@ function ProductModal({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+
+        {/* HEADER */}
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
@@ -333,6 +283,7 @@ function ProductModal({
           </button>
         </div>
 
+        {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="space-y-5 p-6"
@@ -340,11 +291,11 @@ function ProductModal({
           {error && (
             <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-
               <span>{error}</span>
             </div>
           )}
 
+          {/* PRODUCT NAME */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
               Product Name
@@ -354,9 +305,7 @@ function ProductModal({
               type="text"
               value={name}
               onChange={(event) =>
-                setName(
-                  event.target.value
-                )
+                setName(event.target.value)
               }
               placeholder="e.g. Pork Sausage"
               autoFocus
@@ -364,6 +313,7 @@ function ProductModal({
             />
           </div>
 
+          {/* CATEGORY */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
               Category
@@ -372,25 +322,22 @@ function ProductModal({
             <select
               value={category}
               onChange={(event) =>
-                setCategory(
-                  event.target.value
-                )
+                setCategory(event.target.value)
               }
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             >
-              {CATEGORIES.map(
-                (item) => (
-                  <option
-                    key={item}
-                    value={item}
-                  >
-                    {item}
-                  </option>
-                )
-              )}
+              {CATEGORIES.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              ))}
             </select>
           </div>
 
+          {/* UNIT */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
               Unit
@@ -399,32 +346,29 @@ function ProductModal({
             <select
               value={unit}
               onChange={(event) =>
-                setUnit(
-                  event.target.value
-                )
+                setUnit(event.target.value)
               }
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             >
-              {UNITS.map(
-                (item) => (
-                  <option
-                    key={item.value}
-                    value={item.value}
-                  >
-                    {item.label}
-                  </option>
-                )
-              )}
+              {UNITS.map((item) => (
+                <option
+                  key={item.value}
+                  value={item.value}
+                >
+                  {item.label}
+                </option>
+              ))}
             </select>
           </div>
 
+          {/* ACTIVE */}
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50">
             <input
               type="checkbox"
               checked={isActive}
               onChange={(event) =>
                 setIsActive(
-                  event.target.checked
+                  event.target.checked,
                 )
               }
               className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
@@ -441,6 +385,7 @@ function ProductModal({
             </div>
           </label>
 
+          {/* ACTIONS */}
           <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
             <button
               type="button"
@@ -508,59 +453,54 @@ export function Products() {
      LOAD PRODUCTS
   ======================================================= */
 
-  const loadProducts =
-    useCallback(
-      async (
-        showLoading = true
-      ) => {
-        try {
-          if (showLoading) {
-            setLoading(true);
-          }
-
-          setError(null);
-
-          const {
-            data,
-            error: fetchError,
-          } = await supabase
-            .from('products')
-            .select(
-              'id, name, category, unit, is_active, created_at'
-            )
-            .order('name', {
-              ascending: true,
-            });
-
-          if (fetchError) {
-            throw new Error(
-              getFriendlyError(
-                fetchError
-              )
-            );
-          }
-
-          setProducts(
-            (data || []) as Product[]
-          );
-        } catch (err) {
-          console.error(
-            'Unable to load products:',
-            err
-          );
-
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'Unable to load products.'
-          );
-        } finally {
-          setLoading(false);
-          setRefreshing(false);
+  const loadProducts = useCallback(
+    async (showLoading = true) => {
+      try {
+        if (showLoading) {
+          setLoading(true);
         }
-      },
-      []
-    );
+
+        setError(null);
+
+        const {
+          data,
+          error: fetchError,
+        } = await supabase
+          .from('products')
+          .select(
+            'id, name, category, unit, is_active, created_at',
+          )
+          .order('name', {
+            ascending: true,
+          });
+
+        if (fetchError) {
+          throw new Error(
+            getFriendlyError(fetchError),
+          );
+        }
+
+        setProducts(
+          (data || []) as Product[],
+        );
+      } catch (err) {
+        console.error(
+          'Unable to load products:',
+          err,
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load products.',
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     void loadProducts(true);
@@ -570,28 +510,28 @@ export function Products() {
      SEARCH
   ======================================================= */
 
-  const filteredProducts =
-    useMemo(() => {
-      const value =
-        search.trim().toLowerCase();
+  const filteredProducts = useMemo(() => {
+    const value = search
+      .trim()
+      .toLowerCase();
 
-      if (!value) {
-        return products;
-      }
+    if (!value) {
+      return products;
+    }
 
-      return products.filter(
-        (product) =>
-          product.name
-            .toLowerCase()
-            .includes(value) ||
-          product.category
-            .toLowerCase()
-            .includes(value) ||
-          product.unit
-            .toLowerCase()
-            .includes(value)
-      );
-    }, [products, search]);
+    return products.filter(
+      (product) =>
+        product.name
+          .toLowerCase()
+          .includes(value) ||
+        product.category
+          .toLowerCase()
+          .includes(value) ||
+        product.unit
+          .toLowerCase()
+          .includes(value),
+    );
+  }, [products, search]);
 
   /* =======================================================
      STATS
@@ -602,18 +542,16 @@ export function Products() {
 
   const activeProducts =
     products.filter(
-      (product) =>
-        product.is_active
+      (product) => product.is_active,
     ).length;
 
   const inactiveProducts =
     products.filter(
-      (product) =>
-        !product.is_active
+      (product) => !product.is_active,
     ).length;
 
   /* =======================================================
-     PRODUCT MODAL
+     MODAL
   ======================================================= */
 
   const openAddProduct = () => {
@@ -622,7 +560,7 @@ export function Products() {
   };
 
   const openEditProduct = (
-    product: Product
+    product: Product,
   ) => {
     setSelectedProduct(product);
     setModalOpen(true);
@@ -634,156 +572,8 @@ export function Products() {
   };
 
   /* =======================================================
-     DELETE PRODUCT
+     REFRESH
   ======================================================= */
-
- const handleDeleteProduct = async (
-  product: Product
-) => {
-  const confirmed = window.confirm(
-    `DELETE PRODUCT\n\n` +
-      `Product: ${product.name}\n` +
-      `Product ID: ${product.id}\n\n` +
-      `This will permanently delete the product and its inventory record.\n\n` +
-      `This action cannot be undone.\n\n` +
-      `Click OK to permanently delete this product.`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    setError(null);
-
-    /*
-     * =====================================================
-     * STEP 1 — DELETE INVENTORY RECORD
-     * =====================================================
-     *
-     * Inventory is connected to products through:
-     *
-     * inventory.product_id = products.id
-     *
-     * Therefore we use the REAL product UUID.
-     */
-    const {
-      data: deletedInventory,
-      error: inventoryError,
-    } = await supabase
-      .from('inventory')
-      .delete()
-      .eq('product_id', product.id)
-      .select('id, product_id');
-
-    if (inventoryError) {
-      console.error(
-        'Inventory deletion failed:',
-        inventoryError
-      );
-
-      throw new Error(
-        `Could not delete the inventory record. ${getFriendlyError(
-          inventoryError
-        )}`
-      );
-    }
-
-    console.log(
-      'Deleted inventory records:',
-      deletedInventory
-    );
-
-    /*
-     * =====================================================
-     * STEP 2 — DELETE PRODUCT
-     * =====================================================
-     *
-     * IMPORTANT:
-     * We use product.id directly.
-     *
-     * Do NOT use:
-     * product.id.slice(0, 8)
-     *
-     * That is only for display.
-     */
-    const {
-      data: deletedProduct,
-      error: productError,
-    } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', product.id)
-      .select('id');
-
-    if (productError) {
-      console.error(
-        'Product deletion failed:',
-        productError
-      );
-
-      throw new Error(
-        `Could not delete the product. ${getFriendlyError(
-          productError
-        )}`
-      );
-    }
-
-    /*
-     * =====================================================
-     * STEP 3 — VERIFY PRODUCT WAS ACTUALLY DELETED
-     * =====================================================
-     *
-     * Supabase can sometimes return no error when a DELETE
-     * affected zero rows because of RLS.
-     */
-    if (
-      !deletedProduct ||
-      deletedProduct.length === 0
-    ) {
-      throw new Error(
-        'The product was not deleted. Supabase did not return a deleted product. This usually means the DELETE operation is blocked by Row Level Security (RLS) or the product ID does not match.'
-      );
-    }
-
-    /*
-     * =====================================================
-     * STEP 4 — REMOVE FROM UI
-     * =====================================================
-     */
-    setProducts((current) =>
-      current.filter(
-        (item) =>
-          item.id !== product.id
-      )
-    );
-
-    /*
-     * =====================================================
-     * SUCCESS
-     * =====================================================
-     */
-    console.log(
-      `Product ${product.id} deleted successfully.`
-    );
-  } catch (err) {
-    console.error(
-      'Unable to delete product:',
-      err
-    );
-
-    setError(
-      err instanceof Error
-        ? err.message
-        : 'Unable to delete product.'
-    );
-
-    /*
-     * Reload so the UI reflects the actual database.
-     */
-    await loadProducts(false);
-  }
-};
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -815,6 +605,7 @@ export function Products() {
   return (
     <>
       <div className="soms-page space-y-6">
+
         {/* HEADER */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
@@ -835,6 +626,7 @@ export function Products() {
           </div>
 
           <div className="flex gap-2">
+            {/* REFRESH */}
             <button
               type="button"
               onClick={handleRefresh}
@@ -842,16 +634,18 @@ export function Products() {
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <RefreshCw
-                className={`h-4 w-4 ${
-                  refreshing
+                className={
+                  `h-4 w-4 ` +
+                  (refreshing
                     ? 'animate-spin'
-                    : ''
-                }`}
+                    : '')
+                }
               />
 
               Refresh
             </button>
 
+            {/* ADD PRODUCT */}
             <button
               type="button"
               onClick={openAddProduct}
@@ -876,18 +670,17 @@ export function Products() {
 
             <button
               type="button"
-              onClick={() => {
-                void loadProducts(true);
-              }}
-              className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"
+              onClick={() => setError(null)}
+              className="rounded-lg p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-950/40"
             >
-              Try Again
+              <X className="h-4 w-4" />
             </button>
           </div>
         )}
 
         {/* STATS */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+
           <div className="soms-stat-card">
             <div className="flex items-center justify-between">
               <div>
@@ -935,11 +728,14 @@ export function Products() {
               <XCircle className="h-6 w-6 text-red-600" />
             </div>
           </div>
+
         </div>
 
         {/* PRODUCT CATALOGUE */}
         <div className="soms-card overflow-hidden">
+
           <div className="soms-card-header flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
             <div>
               <h3>
                 Product Catalogue
@@ -952,6 +748,7 @@ export function Products() {
               </p>
             </div>
 
+            {/* SEARCH */}
             <div className="relative w-full lg:w-[320px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
@@ -960,7 +757,7 @@ export function Products() {
                 value={search}
                 onChange={(event) =>
                   setSearch(
-                    event.target.value
+                    event.target.value,
                   )
                 }
                 placeholder="Search products..."
@@ -969,48 +766,53 @@ export function Products() {
                 }}
               />
             </div>
+
           </div>
 
-          {filteredProducts.length ===
-          0 ? (
+          {/* EMPTY STATE */}
+          {filteredProducts.length === 0 ? (
             <div className="flex min-h-[320px] flex-col items-center justify-center px-5 text-center">
+
               <Package className="h-12 w-12 text-slate-300 dark:text-slate-700" />
 
               <h3 className="mt-4 font-semibold text-slate-800 dark:text-slate-200">
-                {products.length ===
-                0
+                {products.length === 0
                   ? 'No products to display'
                   : 'No matching products'}
               </h3>
 
               <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                {products.length ===
-                0
+                {products.length === 0
                   ? 'Click Add Product to create your first product.'
                   : 'Try a different product name or category.'}
               </p>
 
-              {products.length ===
-                0 && (
+              {products.length === 0 && (
                 <button
                   type="button"
-                  onClick={
-                    openAddProduct
-                  }
+                  onClick={openAddProduct}
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
                 >
                   <Plus className="h-4 w-4" />
                   Add Product
                 </button>
               )}
+
             </div>
           ) : (
             <>
-              {/* DESKTOP */}
+
+              {/* =================================================
+                 DESKTOP TABLE
+              ================================================= */}
+
               <div className="hidden overflow-x-auto md:block">
+
                 <table className="w-full">
+
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
+
                       <th className="px-5 py-4">
                         Product
                       </th>
@@ -1030,56 +832,57 @@ export function Products() {
                       <th className="px-5 py-4 text-right">
                         Actions
                       </th>
+
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+
                     {filteredProducts.map(
                       (product) => (
                         <tr
-                          key={
-                            product.id
-                          }
+                          key={product.id}
                           className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
                         >
+
+                          {/* PRODUCT */}
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
+
                               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
                                 <Package className="h-5 w-5" />
                               </div>
 
                               <div>
                                 <div className="font-semibold text-slate-900 dark:text-white">
-                                  {
-                                    product.name
-                                  }
+                                  {product.name}
                                 </div>
 
                                 <div className="mt-1 text-xs text-slate-400">
-                                  Product
-                                  ID:{' '}
+                                  Product ID:{' '}
                                   {product.id.slice(
                                     0,
-                                    8
+                                    8,
                                   )}
                                 </div>
                               </div>
+
                             </div>
                           </td>
 
+                          {/* CATEGORY */}
                           <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
-                            {
-                              product.category
-                            }
+                            {product.category}
                           </td>
 
+                          {/* UNIT */}
                           <td className="px-5 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                            {
-                              product.unit
-                            }
+                            {product.unit}
                           </td>
 
+                          {/* STATUS */}
                           <td className="px-5 py-4">
+
                             {product.is_active ? (
                               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
                                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -1091,15 +894,19 @@ export function Products() {
                                 Inactive
                               </span>
                             )}
+
                           </td>
 
+                          {/* ACTIONS — EDIT ONLY */}
                           <td className="px-5 py-4">
-                            <div className="flex justify-end gap-2">
+
+                            <div className="flex justify-end">
+
                               <button
                                 type="button"
                                 onClick={() =>
                                   openEditProduct(
-                                    product
+                                    product,
                                   )
                                 }
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -1108,49 +915,41 @@ export function Products() {
                                 Edit
                               </button>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleDeleteProduct(
-                                    product
-                                  )
-                                }
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete
-                              </button>
                             </div>
+
                           </td>
+
                         </tr>
-                      )
+                      ),
                     )}
+
                   </tbody>
                 </table>
+
               </div>
 
-              {/* MOBILE */}
+              {/* =================================================
+                 MOBILE
+              ================================================= */}
+
               <div className="grid gap-3 p-3 md:hidden">
+
                 {filteredProducts.map(
                   (product) => (
                     <div
-                      key={
-                        product.id
-                      }
+                      key={product.id}
                       className="rounded-xl border border-slate-200 p-4 dark:border-slate-800"
                     >
+
                       <div className="flex items-start justify-between gap-3">
+
                         <div>
                           <h3 className="font-bold text-slate-900 dark:text-white">
-                            {
-                              product.name
-                            }
+                            {product.name}
                           </h3>
 
                           <p className="mt-1 text-xs text-slate-500">
-                            {
-                              product.category
-                            }
+                            {product.category}
                           </p>
                         </div>
 
@@ -1165,64 +964,59 @@ export function Products() {
                             ? 'ACTIVE'
                             : 'INACTIVE'}
                         </span>
+
                       </div>
 
                       <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+
                         <p className="text-[10px] font-semibold uppercase text-slate-400">
                           Unit
                         </p>
 
                         <p className="mt-1 font-bold text-slate-900 dark:text-white">
-                          {
-                            product.unit
-                          }
+                          {product.unit}
                         </p>
+
                       </div>
 
-                      {/* MOBILE ACTIONS */}
-                      <div className="mt-3 grid grid-cols-2 gap-2">
+                      {/* EDIT ONLY */}
+                      <div className="mt-3">
+
                         <button
                           type="button"
                           onClick={() =>
                             openEditProduct(
-                              product
+                              product,
                             )
                           }
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                           Edit
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleDeleteProduct(
-                              product
-                            )
-                          }
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </button>
                       </div>
+
                     </div>
-                  )
+                  ),
                 )}
+
               </div>
+
             </>
           )}
+
         </div>
       </div>
 
-      {/* ADD / EDIT MODAL */}
+      {/* =======================================================
+         ADD / EDIT MODAL
+      ======================================================= */}
+
       <ProductModal
         open={modalOpen}
         product={selectedProduct}
-        onClose={
-          closeProductModal
-        }
+        onClose={closeProductModal}
         onSaved={async () => {
           await loadProducts(false);
         }}

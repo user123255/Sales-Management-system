@@ -3,22 +3,68 @@ import {
   getFriendlyError,
 } from '../lib/supabase';
 
-export type Product = {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
-  is_active: boolean;
-  created_at?: string;
-  updated_at?: string;
-};
+import type { Product } from '../types/database';
+
+export type { Product };
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+export const PRODUCT_CATEGORIES = [
+  'BEEF CUTS',
+  'PORK CUTS',
+  'QUARTERS',
+  'PROCESSED PRODUCTS',
+] as const;
+
+export const PRODUCT_UNITS = [
+  {
+    value: 'kg',
+    label: 'Kilogram (kg)',
+  },
+  {
+    value: 'piece',
+    label: 'Piece',
+  },
+  {
+    value: 'unit',
+    label: 'Unit',
+  },
+  {
+    value: 'litre',
+    label: 'Litre (L)',
+  },
+  {
+    value: 'pack',
+    label: 'Pack',
+  },
+] as const;
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function cleanCategory(category: string): string {
+  const value = category.trim();
+
+  const match = PRODUCT_CATEGORIES.find(
+    (item) => item.toLowerCase() === value.toLowerCase(),
+  );
+
+  return match ?? value.toUpperCase();
+}
+
+function cleanUnit(unit: string): string {
+  return unit.trim().toLowerCase();
+}
 
 /* =========================================================
    FETCH PRODUCTS
 ========================================================= */
 
 export async function fetchProducts(
-  activeOnly = true
+  activeOnly = true,
 ): Promise<Product[]> {
   let query = supabase
     .from('products')
@@ -31,24 +77,16 @@ export async function fetchProducts(
     });
 
   if (activeOnly) {
-    query = query.eq(
-      'is_active',
-      true
-    );
+    query = query.eq('is_active', true);
   }
 
-  const {
-    data,
-    error,
-  } = await query;
+  const { data, error } = await query;
 
   if (error) {
-    throw new Error(
-      getFriendlyError(error)
-    );
+    throw new Error(getFriendlyError(error));
   }
 
-  return (data || []) as Product[];
+  return (data ?? []) as Product[];
 }
 
 /* =========================================================
@@ -66,28 +104,21 @@ export async function fetchAllProducts(): Promise<Product[]> {
 export async function fetchProductsByCategory(): Promise<
   Record<string, Product[]>
 > {
-  const products =
-    await fetchProducts(true);
+  const products = await fetchProducts(true);
 
-  return products.reduce(
-    (
-      acc,
-      product
-    ) => {
-      if (!acc[product.category]) {
-        acc[product.category] = [];
+  return products.reduce<Record<string, Product[]>>(
+    (groups, product) => {
+      const category = cleanCategory(product.category);
+
+      if (!groups[category]) {
+        groups[category] = [];
       }
 
-      acc[product.category].push(
-        product
-      );
+      groups[category].push(product);
 
-      return acc;
+      return groups;
     },
-    {} as Record<
-      string,
-      Product[]
-    >
+    {},
   );
 }
 
@@ -96,28 +127,22 @@ export async function fetchProductsByCategory(): Promise<
 ========================================================= */
 
 export async function fetchProductById(
-  productId: string
+  productId: string,
 ): Promise<Product | null> {
-  if (!productId?.trim()) {
+  const id = productId?.trim();
+
+  if (!id) {
     return null;
   }
 
-  const {
-    data,
-    error,
-  } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .select('*')
-    .eq(
-      'id',
-      productId
-    )
+    .eq('id', id)
     .maybeSingle();
 
   if (error) {
-    throw new Error(
-      getFriendlyError(error)
-    );
+    throw new Error(getFriendlyError(error));
   }
 
   return data as Product | null;
@@ -125,43 +150,56 @@ export async function fetchProductById(
 
 /* =========================================================
    CREATE PRODUCT
-   Creates the product AND matching inventory record.
 ========================================================= */
 
-export async function createProduct(
-  input: {
-    name: string;
-    category: string;
-    unit: string;
-  }
-): Promise<Product> {
-  const name =
-    input.name.trim();
-
-  const category =
-    input.category.trim();
-
-  const unit =
-    input.unit.trim();
+export async function createProduct(input: {
+  name: string;
+  category: string;
+  unit: string;
+  is_active?: boolean;
+}): Promise<Product> {
+  const name = input.name.trim();
+  const category = cleanCategory(input.category);
+  const unit = cleanUnit(input.unit);
+  const isActive = input.is_active !== false;
 
   if (!name) {
-    throw new Error(
-      'Product name is required.'
-    );
+    throw new Error('Product name is required.');
   }
 
   if (!category) {
-    throw new Error(
-      'Product category is required.'
-    );
+    throw new Error('Product category is required.');
   }
 
   if (!unit) {
+    throw new Error('Product unit is required.');
+  }
+
+  /* Check for duplicate product name */
+  const {
+    data: existingProduct,
+    error: duplicateCheckError,
+  } = await supabase
+    .from('products')
+    .select('id, name')
+    .ilike('name', name)
+    .maybeSingle();
+
+  if (duplicateCheckError) {
     throw new Error(
-      'Product unit is required.'
+      `Unable to check for duplicate products. ${getFriendlyError(
+        duplicateCheckError,
+      )}`,
     );
   }
 
+  if (existingProduct) {
+    throw new Error(
+      `A product named "${name}" already exists.`,
+    );
+  }
+
+  /* Create product */
   const {
     data,
     error,
@@ -171,27 +209,22 @@ export async function createProduct(
       name,
       category,
       unit,
-      is_active: true,
+      is_active: isActive,
     })
     .select('*')
     .single();
 
   if (error) {
-    throw new Error(
-      getFriendlyError(error)
-    );
+    throw new Error(getFriendlyError(error));
   }
 
   if (!data?.id) {
     throw new Error(
-      'Product was created, but no product ID was returned.'
+      'Product was created, but no product ID was returned.',
     );
   }
 
-  /*
-   * Create the matching inventory row.
-   */
-
+  /* Create matching inventory record */
   const {
     error: inventoryError,
   } = await supabase
@@ -201,25 +234,20 @@ export async function createProduct(
       quantity: 0,
       unit,
       low_stock_threshold: 10,
+      updated_at: new Date().toISOString(),
     });
 
   if (inventoryError) {
-    /*
-     * Roll the product back if inventory creation fails.
-     */
-
+    /* Attempt rollback */
     await supabase
       .from('products')
       .delete()
-      .eq(
-        'id',
-        data.id
-      );
+      .eq('id', data.id);
 
     throw new Error(
       `Product was created, but its inventory record could not be created. ${getFriendlyError(
-        inventoryError
-      )}`
+        inventoryError,
+      )}`,
     );
   }
 
@@ -235,127 +263,101 @@ export async function updateProduct(
   updates: Partial<
     Pick<
       Product,
-      | 'name'
-      | 'category'
-      | 'unit'
-      | 'is_active'
+      'name' | 'category' | 'unit' | 'is_active'
     >
-  >
+  >,
 ): Promise<Product> {
-  if (!id?.trim()) {
-    throw new Error(
-      'Product ID is required.'
-    );
+  const productId = id?.trim();
+
+  if (!productId) {
+    throw new Error('Product ID is required.');
   }
 
-  const cleanedUpdates: Record<
-    string,
-    unknown
-  > = {
-    ...updates,
-    updated_at:
-      new Date().toISOString(),
-  };
+  const cleanedUpdates: Record<string, unknown> = {};
 
-  if (
-    typeof updates.name ===
-    'string'
-  ) {
-    const name =
-      updates.name.trim();
+  if (typeof updates.name === 'string') {
+    const name = updates.name.trim();
 
     if (!name) {
       throw new Error(
-        'Product name cannot be empty.'
+        'Product name cannot be empty.',
       );
     }
 
-    cleanedUpdates.name =
-      name;
+    cleanedUpdates.name = name;
   }
 
-  if (
-    typeof updates.category ===
-    'string'
-  ) {
-    const category =
-      updates.category.trim();
+  if (typeof updates.category === 'string') {
+    const category = cleanCategory(
+      updates.category,
+    );
 
     if (!category) {
       throw new Error(
-        'Product category cannot be empty.'
+        'Product category cannot be empty.',
       );
     }
 
-    cleanedUpdates.category =
-      category;
+    cleanedUpdates.category = category;
   }
 
-  if (
-    typeof updates.unit ===
-    'string'
-  ) {
-    const unit =
-      updates.unit.trim();
+  if (typeof updates.unit === 'string') {
+    const unit = cleanUnit(updates.unit);
 
     if (!unit) {
       throw new Error(
-        'Product unit cannot be empty.'
+        'Product unit cannot be empty.',
       );
     }
 
-    cleanedUpdates.unit =
-      unit;
+    cleanedUpdates.unit = unit;
   }
 
+  if (typeof updates.is_active === 'boolean') {
+    cleanedUpdates.is_active =
+      updates.is_active;
+  }
+
+  if (Object.keys(cleanedUpdates).length === 0) {
+    throw new Error(
+      'No product changes were provided.',
+    );
+  }
+
+  /* Update product */
   const {
     data,
     error,
   } = await supabase
     .from('products')
-    .update(
-      cleanedUpdates
-    )
-    .eq(
-      'id',
-      id
-    )
+    .update(cleanedUpdates)
+    .eq('id', productId)
     .select('*')
     .single();
 
   if (error) {
-    throw new Error(
-      getFriendlyError(error)
-    );
+    throw new Error(getFriendlyError(error));
   }
 
-  /*
-   * Keep inventory unit synchronized.
-   */
+  /* Synchronize inventory unit */
+  if (typeof updates.unit === 'string') {
+    const unit = cleanUnit(updates.unit);
 
-  if (
-    typeof updates.unit ===
-    'string'
-  ) {
     const {
       error: inventoryError,
     } = await supabase
       .from('inventory')
       .update({
-        unit:
-          updates.unit.trim(),
+        unit,
         updated_at:
           new Date().toISOString(),
       })
-      .eq(
-        'product_id',
-        id
-      );
+      .eq('product_id', productId);
 
     if (inventoryError) {
       console.warn(
         'Product updated, but inventory unit could not be synchronized:',
-        inventoryError
+        inventoryError,
       );
     }
   }
@@ -367,189 +369,119 @@ export async function updateProduct(
    DELETE PRODUCT
 ========================================================= */
 
-/**
- * Permanently deletes:
- *
- * 1. The inventory record belonging to the product
- * 2. The product itself
- *
- * IMPORTANT:
- * The product can only be physically deleted if no other
- * database table is preventing the deletion through a
- * foreign-key relationship and the current user has DELETE
- * permission through RLS.
- */
 export async function deleteProduct(
-  productId: string
+  productId: string,
 ): Promise<void> {
-  const id =
-    productId?.trim();
+  const id = productId?.trim();
 
   if (!id) {
-    throw new Error(
-      'Product ID is required.'
-    );
+    throw new Error('Product ID is required.');
   }
 
-  /*
-   * -------------------------------------------------------
-   * 1. VERIFY PRODUCT EXISTS
-   * -------------------------------------------------------
-   */
-
+  /* Verify product exists */
   const {
     data: product,
     error: productFetchError,
   } = await supabase
     .from('products')
-    .select(
-      'id, name'
-    )
-    .eq(
-      'id',
-      id
-    )
+    .select('id, name')
+    .eq('id', id)
     .maybeSingle();
 
   if (productFetchError) {
     throw new Error(
       `Unable to check product. ${getFriendlyError(
-        productFetchError
-      )}`
+        productFetchError,
+      )}`,
     );
   }
 
   if (!product) {
     throw new Error(
-      'Product not found. It may have already been deleted.'
+      'Product not found. It may have already been deleted.',
     );
   }
 
-  /*
-   * -------------------------------------------------------
-   * 2. DELETE INVENTORY RECORD
-   * -------------------------------------------------------
-   */
-
+  /* Delete inventory */
   const {
     error: inventoryDeleteError,
   } = await supabase
     .from('inventory')
     .delete()
-    .eq(
-      'product_id',
-      id
-    );
+    .eq('product_id', id);
 
   if (inventoryDeleteError) {
     throw new Error(
       `Unable to delete the inventory record for "${product.name}". ${getFriendlyError(
-        inventoryDeleteError
-      )}`
+        inventoryDeleteError,
+      )}`,
     );
   }
 
-  /*
-   * -------------------------------------------------------
-   * 3. DELETE PRODUCT
-   * -------------------------------------------------------
-   */
-
+  /* Delete product */
   const {
     data: deletedRows,
     error: productDeleteError,
   } = await supabase
     .from('products')
     .delete()
-    .eq(
-      'id',
-      id
-    )
+    .eq('id', id)
     .select('id');
 
   if (productDeleteError) {
-    const friendly =
-      getFriendlyError(
-        productDeleteError
-      );
-
-    /*
-     * Give a more useful message for common database
-     * dependency problems.
-     */
-
     const message =
-      productDeleteError.message
-        ?.toLowerCase() || '';
+      productDeleteError.message?.toLowerCase() ??
+      '';
 
     if (
-      message.includes(
-        'foreign key'
-      ) ||
-      message.includes(
-        'violates'
-      ) ||
-      message.includes(
-        'referenced'
-      )
+      message.includes('foreign key') ||
+      message.includes('violates') ||
+      message.includes('referenced')
     ) {
       throw new Error(
-        `Product "${product.name}" cannot be permanently deleted because it is being used by another record, such as an order. ${friendly}`
+        `Product "${product.name}" cannot be permanently deleted because another record is using it. ${getFriendlyError(
+          productDeleteError,
+        )}`,
       );
     }
 
     throw new Error(
-      `Unable to delete product "${product.name}". ${friendly}`
+      `Unable to delete product "${product.name}". ${getFriendlyError(
+        productDeleteError,
+      )}`,
     );
   }
-
-  /*
-   * -------------------------------------------------------
-   * 4. VERIFY THE DELETE
-   * -------------------------------------------------------
-   *
-   * With Supabase/PostgREST, an empty returned array can
-   * indicate that the DELETE was blocked by RLS.
-   */
 
   if (
     !deletedRows ||
     deletedRows.length === 0
   ) {
     throw new Error(
-      `Product "${product.name}" was not deleted. Your database Row Level Security (RLS) policy may not allow DELETE operations on the products table.`
+      'The product was not deleted. Your database Row Level Security (RLS) policy may not allow DELETE operations.',
     );
   }
 
-  /*
-   * -------------------------------------------------------
-   * 5. FINAL VERIFICATION
-   * -------------------------------------------------------
-   */
-
+  /* Verify deletion */
   const {
     data: remainingProduct,
     error: verifyError,
   } = await supabase
     .from('products')
     .select('id')
-    .eq(
-      'id',
-      id
-    )
+    .eq('id', id)
     .maybeSingle();
 
   if (verifyError) {
     throw new Error(
       `The product deletion was submitted, but it could not be verified. ${getFriendlyError(
-        verifyError
-      )}`
+        verifyError,
+      )}`,
     );
   }
 
   if (remainingProduct) {
     throw new Error(
-      `Product "${product.name}" still exists in the database. The delete operation was not completed.`
+      `Product "${product.name}" still exists in the database.`,
     );
   }
 }
@@ -559,34 +491,12 @@ export async function deleteProduct(
 ========================================================= */
 
 export async function searchProducts(
-  query: string
+  query: string,
 ): Promise<Product[]> {
   const searchTerm =
-    query
-      .trim()
-      .toLowerCase();
+    query.trim().toLowerCase();
 
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('products')
-    .select('*')
-    .order('category', {
-      ascending: true,
-    })
-    .order('name', {
-      ascending: true,
-    });
-
-  if (error) {
-    throw new Error(
-      getFriendlyError(error)
-    );
-  }
-
-  const products =
-    (data || []) as Product[];
+  const products = await fetchProducts(true);
 
   if (!searchTerm) {
     return products;
@@ -595,29 +505,20 @@ export async function searchProducts(
   return products.filter(
     (product) => {
       const name =
-        product.name
-          ?.toLowerCase() || '';
+        product.name?.toLowerCase() ?? '';
 
       const category =
-        product.category
-          ?.toLowerCase() || '';
+        product.category?.toLowerCase() ?? '';
 
       const unit =
-        product.unit
-          ?.toLowerCase() || '';
+        product.unit?.toLowerCase() ?? '';
 
       return (
-        name.includes(
-          searchTerm
-        ) ||
-        category.includes(
-          searchTerm
-        ) ||
-        unit.includes(
-          searchTerm
-        )
+        name.includes(searchTerm) ||
+        category.includes(searchTerm) ||
+        unit.includes(searchTerm)
       );
-    }
+    },
   );
 }
 
@@ -628,77 +529,77 @@ export async function searchProducts(
 export const SEED_PRODUCTS = [
   {
     name: 'Blade',
-    category: 'Beef Cuts',
+    category: 'BEEF CUTS',
     unit: 'kg',
   },
   {
     name: 'Brisket',
-    category: 'Beef Cuts',
+    category: 'BEEF CUTS',
     unit: 'kg',
   },
   {
     name: 'Chuck',
-    category: 'Beef Cuts',
+    category: 'BEEF CUTS',
     unit: 'kg',
   },
   {
     name: 'Rump',
-    category: 'Beef Cuts',
+    category: 'BEEF CUTS',
     unit: 'kg',
   },
   {
     name: 'Sirloin',
-    category: 'Beef Cuts',
+    category: 'BEEF CUTS',
     unit: 'kg',
   },
   {
     name: 'Fillet',
-    category: 'Beef Cuts',
+    category: 'BEEF CUTS',
     unit: 'kg',
   },
   {
     name: 'Pork Spare Ribs',
-    category: 'Pork Cuts',
+    category: 'PORK CUTS',
     unit: 'kg',
   },
   {
     name: 'Pork Chops',
-    category: 'Pork Cuts',
+    category: 'PORK CUTS',
     unit: 'kg',
   },
   {
     name: 'Pork Head',
-    category: 'Pork Cuts',
+    category: 'PORK CUTS',
     unit: 'kg',
   },
   {
     name: 'Pork Trotters',
-    category: 'Pork Cuts',
+    category: 'PORK CUTS',
     unit: 'kg',
   },
   {
     name: 'Pork Rashers',
-    category: 'Pork Cuts',
+    category: 'PORK CUTS',
     unit: 'kg',
   },
   {
     name: 'Beef Quarter',
-    category: 'Quarters',
+    category: 'QUARTERS',
     unit: 'kg',
   },
   {
     name: 'Pork Quarter',
-    category: 'Quarters',
+    category: 'QUARTERS',
     unit: 'kg',
   },
   {
     name: 'Sausages',
-    category: 'Processed Products',
+    category: 'PROCESSED PRODUCTS',
     unit: 'kg',
   },
   {
     name: 'Minced Meat',
-    category: 'Processed Products',
+    category: 'PROCESSED PRODUCTS',
     unit: 'kg',
   },
-];
+] as const;

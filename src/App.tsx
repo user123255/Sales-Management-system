@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+
 import {
   Navigate,
   Route,
@@ -10,14 +11,20 @@ import { AuthProvider, useAuth } from './lib/auth';
 
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+
 import { FinanceDashboard } from './pages/FinanceDashboard';
+
 import { ButcheryDashboard } from './pages/ButcheryDashboard';
 import { ButcheryOrders } from './pages/ButcheryOrders';
 import { ButcheryOrderDetails } from './pages/ButcheryOrderDetails';
+
+import { OtherDepartmentDashboard } from './pages/OtherDepartmentDashboard';
+
 import { CreateOrder } from './pages/CreateOrder';
 import Orders from './pages/Orders';
 import OrderHistory from './pages/OrderHistory';
 import Receipts from './pages/Receipts';
+
 import { DebtorAccounts } from './pages/DebtorAccounts';
 import { Invoices } from './pages/Invoices';
 import { Inventory } from './pages/Inventory';
@@ -37,11 +44,12 @@ function LoadingScreen() {
     <div className="soms-loading">
       <div className="soms-loading-card">
         <div className="soms-loading-logo">
+          <span>S</span>
         </div>
 
         <div>
           <h1>SOMS</h1>
-          <p>Sales & Order Management System</p>
+          <p>Sales &amp; Order Management System</p>
         </div>
 
         <div className="soms-loading-spinner" />
@@ -54,8 +62,12 @@ function LoadingScreen() {
    DASHBOARD ROUTING
 ========================================================= */
 
-function getDashboardPath(department?: string | null) {
-  const value = String(department || '').trim().toLowerCase();
+function getDashboardPath(
+  department?: string | null
+): string {
+  const value = String(department || '')
+    .trim()
+    .toLowerCase();
 
   if (value === 'finance') {
     return '/finance';
@@ -69,7 +81,7 @@ function getDashboardPath(department?: string | null) {
 }
 
 /* =========================================================
-   PROTECTED APPLICATION
+   PROTECTED ROUTE
 ========================================================= */
 
 function ProtectedRoute({
@@ -89,7 +101,9 @@ function ProtectedRoute({
       <Navigate
         to="/login"
         replace
-        state={{ from: location.pathname }}
+        state={{
+          from: location.pathname,
+        }}
       />
     );
   }
@@ -98,7 +112,7 @@ function ProtectedRoute({
 }
 
 /* =========================================================
-   PUBLIC APPLICATION
+   PUBLIC ROUTE
 ========================================================= */
 
 function PublicRoute({
@@ -125,128 +139,21 @@ function PublicRoute({
 }
 
 /* =========================================================
-   OTHER DEPARTMENT DASHBOARD
-========================================================= */
-
-function OtherDepartmentDashboard() {
-  const { profile } = useAuth();
-
-  return (
-    <div className="soms-page">
-      <section className="soms-hero">
-        <div>
-          <span className="soms-eyebrow">
-            Department Workspace
-          </span>
-
-          <h1>
-            Welcome to your workspace
-          </h1>
-
-          <p>
-            Manage departmental orders, track fulfilment and
-            stay updated with your team's activity.
-          </p>
-        </div>
-
-        <div className="soms-hero-badge">
-          <span />
-          Live
-        </div>
-      </section>
-
-      <section className="soms-stat-grid">
-        <div className="soms-stat-card">
-          <span>Department</span>
-          <strong>
-            {profile?.department || 'Operations'}
-          </strong>
-        </div>
-
-        <div className="soms-stat-card">
-          <span>Today's Orders</span>
-          <strong>0</strong>
-        </div>
-
-        <div className="soms-stat-card">
-          <span>Pending</span>
-          <strong className="warning">0</strong>
-        </div>
-
-        <div className="soms-stat-card">
-          <span>Completed</span>
-          <strong className="success">0</strong>
-        </div>
-      </section>
-
-      <section className="soms-content-grid">
-        <div className="soms-panel">
-          <div className="soms-panel-header">
-            <div>
-              <h2>Recent Orders</h2>
-              <p>Your department's latest orders.</p>
-            </div>
-          </div>
-
-          <div className="soms-empty">
-            <div className="soms-empty-icon">🛒</div>
-
-            <h3>No orders yet</h3>
-
-            <p>
-              Create your first departmental order to get started.
-            </p>
-          </div>
-        </div>
-
-        <div className="soms-panel">
-          <div className="soms-panel-header">
-            <div>
-              <h2>Quick Actions</h2>
-              <p>Common tasks for your department.</p>
-            </div>
-          </div>
-
-          <div className="soms-action-grid">
-            <a href="/other/orders/create">
-              <span>＋</span>
-              Create Order
-            </a>
-
-            <a href="/other/orders">
-              <span>🛒</span>
-              View Orders
-            </a>
-
-            <a href="/other/receipts">
-              <span>🧾</span>
-              Receipts
-            </a>
-
-            <a href="/other/notifications">
-              <span>🔔</span>
-              Notifications
-            </a>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/* =========================================================
    APPLICATION ROUTES
 ========================================================= */
 
 function AppRoutes() {
   const { profile } = useAuth();
 
+  const dashboardPath = getDashboardPath(
+    profile?.department
+  );
+
   return (
     <Routes>
-
-      {/* =====================================================
-          PUBLIC
-      ===================================================== */}
+      {/* ===================================================
+          PUBLIC ROUTES
+      =================================================== */}
 
       <Route
         path="/login"
@@ -266,9 +173,9 @@ function AppRoutes() {
         }
       />
 
-      {/* =====================================================
+      {/* ===================================================
           PROTECTED APPLICATION
-      ===================================================== */}
+      =================================================== */}
 
       <Route
         element={
@@ -277,24 +184,21 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-
-        {/* ===================================================
-            ROOT
-        =================================================== */}
+        {/* ROOT */}
 
         <Route
           path="/"
           element={
             <Navigate
-              to={getDashboardPath(profile?.department)}
+              to={dashboardPath}
               replace
             />
           }
         />
 
-        {/* ===================================================
+        {/* =================================================
             FINANCE
-        =================================================== */}
+        ================================================= */}
 
         <Route
           path="/finance"
@@ -311,12 +215,6 @@ function AppRoutes() {
           element={<Orders />}
         />
 
-        {/* FIX: Finance order details */}
-        <Route
-          path="/finance/orders/:orderId"
-          element={<ButcheryOrderDetails />}
-        />
-
         <Route
           path="/finance/orders/create"
           element={<CreateOrder />}
@@ -325,6 +223,11 @@ function AppRoutes() {
         <Route
           path="/finance/orders/history"
           element={<OrderHistory />}
+        />
+
+        <Route
+          path="/finance/orders/:orderId"
+          element={<ButcheryOrderDetails />}
         />
 
         <Route
@@ -367,9 +270,9 @@ function AppRoutes() {
           element={<Settings />}
         />
 
-        {/* ===================================================
+        {/* =================================================
             BUTCHERY
-        =================================================== */}
+        ================================================= */}
 
         <Route
           path="/butchery"
@@ -426,9 +329,9 @@ function AppRoutes() {
           element={<Settings />}
         />
 
-        {/* ===================================================
+        {/* =================================================
             OTHER DEPARTMENTS
-        =================================================== */}
+        ================================================= */}
 
         <Route
           path="/other"
@@ -445,12 +348,6 @@ function AppRoutes() {
           element={<Orders />}
         />
 
-        {/* FIX: Other department order details */}
-        <Route
-          path="/other/orders/:orderId"
-          element={<ButcheryOrderDetails />}
-        />
-
         <Route
           path="/other/orders/create"
           element={<CreateOrder />}
@@ -459,6 +356,13 @@ function AppRoutes() {
         <Route
           path="/other/orders/history"
           element={<OrderHistory />}
+        />
+
+        {/* Use the existing order-details page.
+            This removes the missing OtherOrderDetails error. */}
+        <Route
+          path="/other/orders/:orderId"
+          element={<ButcheryOrderDetails />}
         />
 
         <Route
@@ -476,9 +380,19 @@ function AppRoutes() {
           element={<Settings />}
         />
 
-                {/* ===================================================
-            GENERAL
-        =================================================== */}
+        {/* =================================================
+            GENERAL ROUTES
+        ================================================= */}
+
+        <Route
+          path="/dashboard"
+          element={
+            <Navigate
+              to={dashboardPath}
+              replace
+            />
+          }
+        />
 
         <Route
           path="/orders"
@@ -540,30 +454,19 @@ function AppRoutes() {
           element={<Settings />}
         />
 
-        <Route
-          path="/dashboard"
-          element={
-            <Navigate
-              to={getDashboardPath(profile?.department)}
-              replace
-            />
-          }
-        />
-
-                {/* ===================================================
+        {/* =================================================
             FALLBACK
-        =================================================== */}
+        ================================================= */}
 
         <Route
           path="*"
           element={
             <Navigate
-              to={getDashboardPath(profile?.department)}
+              to={dashboardPath}
               replace
             />
           }
         />
-
       </Route>
     </Routes>
   );

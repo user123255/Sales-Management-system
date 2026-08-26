@@ -7,6 +7,7 @@ import {
   Loader2,
   LockKeyhole,
   Mail,
+  ShieldCheck,
   User,
   Building2,
   CheckCircle2,
@@ -14,23 +15,29 @@ import {
 
 import { supabase, getFriendlyError } from '../lib/supabase';
 import type { Department } from '../types/database';
-import { getDashboardRoute } from '../lib/permissions';
 
 const departments: {
   value: Department;
   label: string;
+  description: string;
 }[] = [
   {
     value: 'finance',
     label: 'Finance',
+    description:
+      'Orders, invoices, payments and debtor accounts',
   },
   {
     value: 'butchery',
     label: 'Butchery',
+    description:
+      'Orders, products, preparation and inventory',
   },
   {
     value: 'other',
     label: 'Other Department',
+    description:
+      'Create and manage departmental orders',
   },
 ];
 
@@ -39,12 +46,8 @@ export function Register() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-
   const [department, setDepartment] =
     useState<Department>('finance');
-
-  const [otherDepartment, setOtherDepartment] =
-    useState('');
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] =
@@ -60,13 +63,8 @@ export function Register() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const [
-    emailConfirmationRequired,
-    setEmailConfirmationRequired,
-  ] = useState(false);
-
   const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
+    event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
@@ -75,8 +73,6 @@ export function Register() {
 
     const cleanName = fullName.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanOtherDepartment =
-      otherDepartment.trim();
 
     if (!cleanName) {
       setError('Please enter your full name.');
@@ -88,19 +84,6 @@ export function Register() {
       return;
     }
 
-    if (!department) {
-      setError('Please select your department.');
-      return;
-    }
-
-    if (
-      department === 'other' &&
-      !cleanOtherDepartment
-    ) {
-      setError('Please enter your department name.');
-      return;
-    }
-
     if (!password) {
       setError('Please create a password.');
       return;
@@ -108,7 +91,7 @@ export function Register() {
 
     if (password.length < 6) {
       setError(
-        'Password must contain at least 6 characters.',
+        'Password must contain at least 6 characters.'
       );
       return;
     }
@@ -118,25 +101,34 @@ export function Register() {
       return;
     }
 
+    if (!department) {
+      setError('Please select your department.');
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const { data, error: signUpError } =
-        await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: {
-              full_name: cleanName,
-              department,
-              department_name:
-                department === 'other'
-                  ? cleanOtherDepartment
-                  : null,
-              role: 'user',
-            },
+      /*
+       * Create the Supabase authentication account.
+       *
+       * The selected department and user's name are stored
+       * in the authentication metadata.
+       */
+      const {
+        data,
+        error: signUpError,
+      } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            full_name: cleanName,
+            department,
+            role: 'user',
           },
-        });
+        },
+      });
 
       if (signUpError) {
         throw signUpError;
@@ -144,577 +136,565 @@ export function Register() {
 
       if (!data.user) {
         throw new Error(
-          'The account could not be created. Please try again.',
+          'The account could not be created. Please try again.'
         );
       }
 
-      if (!data.session) {
-        setEmailConfirmationRequired(true);
-        setSuccess(true);
-        return;
-      }
-
-      const { error: profileError } =
-        await supabase
-          .from('profiles')
-          .upsert(
-            {
-              id: data.user.id,
-              email: cleanEmail,
-              full_name: cleanName,
-              department,
-              role: 'user',
-              avatar_url: null,
-              is_active: true,
-              notification_preferences: {
-                order_updates: true,
-                new_orders: true,
-                completed_orders: true,
-              },
-              updated_at:
-                new Date().toISOString(),
+      /*
+       * Create/update the application profile.
+       *
+       * This is safe when a database trigger already creates
+       * the profile because upsert uses the user's auth ID.
+       */
+      const {
+        error: profileError,
+      } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: data.user.id,
+            email: cleanEmail,
+            full_name: cleanName,
+            department,
+            role: 'user',
+            avatar_url: null,
+            is_active: true,
+            notification_preferences: {
+              order_updates: true,
+              new_orders: true,
+              completed_orders: true,
             },
-            {
-              onConflict: 'id',
-            },
-          );
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict: 'id',
+          }
+        );
 
       if (profileError) {
         console.error(
           'Profile creation error:',
-          profileError,
+          profileError
         );
 
+        /*
+         * Do not leave the user sitting on the registration
+         * page when the Auth account itself was created.
+         */
         throw new Error(
-          'Your account was created, but your profile could not be created. Please contact the system administrator.',
+          'Your account was created, but your profile could not be completed. Please contact the system administrator.'
         );
       }
 
+      /*
+       * IMPORTANT:
+       *
+       * We deliberately sign the user out after registration.
+       *
+       * The required flow is:
+       *
+       * CREATE ACCOUNT
+       *       ↓
+       * LOGIN PAGE
+       *       ↓
+       * ENTER EMAIL + PASSWORD
+       *       ↓
+       * DEPARTMENT DASHBOARD
+       *
+       * Therefore registration never sends the user directly
+       * into Finance, Butchery or another dashboard.
+       */
+      await supabase.auth.signOut();
+
       setSuccess(true);
 
+      /*
+       * Give the user a short confirmation message and then
+       * return them to the normal login screen.
+       */
       setTimeout(() => {
-        navigate(
-          getDashboardRoute(department),
-          {
-            replace: true,
+        navigate('/login', {
+          replace: true,
+          state: {
+            registered: true,
+            email: cleanEmail,
           },
-        );
-      }, 800);
+        });
+      }, 1000);
     } catch (err) {
       console.error(
         'Registration error:',
-        err,
+        err
       );
 
-      setError(getFriendlyError(err));
+      setError(
+        getFriendlyError(err)
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  /*
-   * ============================================================
-   * SUCCESS SCREEN
-   * ============================================================
-   */
-
   if (success) {
     return (
-      <main className="min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900">
-        <div className="flex min-h-screen items-center justify-center px-5 py-10">
-          <div className="w-full max-w-md">
+      <main className="min-h-screen bg-[#F8F6F1] flex items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-3xl bg-white p-10 text-center shadow-xl border border-[#E5E0D8]">
 
-            {/* Logo */}
-            <div className="mb-7 flex justify-center">
-              <div className="flex items-center gap-3">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#287A52]/10">
+            <CheckCircle2 className="h-8 w-8 text-[#287A52]" />
+          </div>
 
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6B1F2A] shadow-lg shadow-[#6B1F2A]/20">
-                  <span className="text-xl font-black text-white">
-                    S
-                  </span>
-                </div>
+          <h1 className="text-2xl font-bold text-[#20252B]">
+            Account Created
+          </h1>
 
-                <div>
-                  <p className="text-lg font-black tracking-tight text-[#6B1F2A]">
-                    SOMS
-                  </p>
+          <p className="mt-3 text-sm leading-6 text-[#667085]">
+            Your SOMS account has been created successfully.
+          </p>
 
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                    Sales &amp; Order Management
-                  </p>
-                </div>
+          <p className="mt-2 text-sm leading-6 text-[#667085]">
+            You will now be returned to the login page.
+            Please sign in using the email and password
+            you just created.
+          </p>
 
-              </div>
-            </div>
-
-            {/* Success card */}
-            <div className="rounded-[1.75rem] border border-slate-200 bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.07)]">
-
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B1F2A]/10">
-                <CheckCircle2 className="h-7 w-7 text-[#6B1F2A]" />
-              </div>
-
-              <h1 className="text-2xl font-bold tracking-tight text-[#6B1F2A]">
-                Account created
-              </h1>
-
-              {emailConfirmationRequired ? (
-                <>
-                  <p className="mt-3 text-sm leading-6 text-slate-500">
-                    Your SOMS account has been created
-                    successfully.
-                  </p>
-
-                  <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Please check your email and confirm
-                    your address before signing in.
-                  </p>
-
-                  <Link
-                    to="/login"
-                    className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#6B1F2A] text-sm font-bold text-white shadow-lg shadow-[#6B1F2A]/20 transition hover:bg-[#541722]"
-                  >
-                    Go to sign in
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </>
-              ) : (
-                <p className="mt-3 text-sm leading-6 text-slate-500">
-                  Your account has been created.
-                  Redirecting you to your dashboard...
-                </p>
-              )}
-
-            </div>
-
-            <p className="mt-6 text-center text-[11px] font-medium text-slate-400">
-              SOMS © 2026
-            </p>
-
+          <div className="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-[#287A52]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Returning to login...
           </div>
         </div>
       </main>
     );
   }
 
-  /*
-   * ============================================================
-   * REGISTER PAGE
-   * ============================================================
-   */
-
   return (
-    <main className="min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900">
+    <main className="min-h-screen bg-[#F8F6F1] text-[#20252B]">
 
-      {/* Background decoration */}
-      <div className="pointer-events-none fixed -right-40 -top-40 h-96 w-96 rounded-full bg-[#6B1F2A]/5 blur-[100px]" />
+      <div className="min-h-screen flex">
 
-      <div className="pointer-events-none fixed -bottom-40 -left-40 h-96 w-96 rounded-full bg-[#D6A84F]/5 blur-[100px]" />
+        {/* =====================================================
+            BRAND PANEL
+        ====================================================== */}
 
-      <div className="relative flex min-h-screen items-center justify-center px-5 py-8 sm:px-8">
+        <section className="hidden lg:flex lg:w-[42%] bg-gradient-to-br from-[#641923] via-[#7A1F2B] to-[#8B2635] relative overflow-hidden">
 
-        <div className="w-full max-w-[620px]">
+          <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-white/5 blur-3xl" />
 
-          {/* ====================================================
-              TOP BRAND
-          ===================================================== */}
+          <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-[#C89B3C]/10 blur-3xl" />
 
-          <div className="mb-6 flex items-center justify-center">
-            <div className="flex items-center gap-3">
+          <div className="relative z-10 flex w-full flex-col justify-between p-12">
 
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#6B1F2A] shadow-lg shadow-[#6B1F2A]/20">
-                <span className="text-lg font-black text-white">
+            <div className="flex items-center gap-4">
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-lg">
+                <span className="text-xl font-black text-[#7A1F2B]">
                   S
                 </span>
               </div>
 
               <div>
-                <p className="text-lg font-black tracking-tight text-[#6B1F2A]">
+                <p className="text-lg font-bold text-white">
                   SOMS
                 </p>
 
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                  Sales &amp; Order Management
+                <p className="text-xs text-white/70">
+                  Sales & Order Management System
                 </p>
               </div>
 
             </div>
+
+            <div className="max-w-md">
+
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#E6C36A]">
+                Create your account
+              </p>
+
+              <h2 className="mt-4 text-4xl font-bold leading-tight text-white">
+                Join the SOMS management system.
+              </h2>
+
+              <p className="mt-5 text-base leading-7 text-white/75">
+                Create your departmental account and use
+                your credentials to sign in securely.
+              </p>
+
+              <div className="mt-8 space-y-4">
+
+                <div className="flex items-center gap-3 text-white/80">
+                  <CheckCircle2 className="h-5 w-5 text-[#E6C36A]" />
+                  <span className="text-sm">
+                    Department-based access
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 text-white/80">
+                  <CheckCircle2 className="h-5 w-5 text-[#E6C36A]" />
+                  <span className="text-sm">
+                    Secure account authentication
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 text-white/80">
+                  <CheckCircle2 className="h-5 w-5 text-[#E6C36A]" />
+                  <span className="text-sm">
+                    Orders, inventory and reporting
+                  </span>
+                </div>
+
+              </div>
+
+            </div>
+
+            <p className="text-xs text-white/50">
+              SOMS • Internal Management Platform
+            </p>
+
           </div>
+        </section>
 
-          {/* ====================================================
-              REGISTER CARD
-          ===================================================== */}
+        {/* =====================================================
+            REGISTRATION FORM
+        ====================================================== */}
 
-          <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.07)]">
+        <section className="flex flex-1 items-center justify-center px-6 py-10">
 
-            {/* ==================================================
-                REGISTER HEADER
-            ================================================== */}
+          <div className="w-full max-w-xl">
 
-            <div className="relative overflow-hidden bg-[#6B1F2A] px-7 py-7 sm:px-9">
+            <div className="mb-8">
 
-              {/* Decorative glow */}
-              <div className="pointer-events-none absolute -right-20 -top-24 h-60 w-60 rounded-full bg-white/10 blur-3xl" />
+              <div className="flex items-center gap-3 lg:hidden mb-8">
 
-              <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-[#D6A84F]/10 blur-3xl" />
-
-              <div className="relative">
-
-                {/* Gold accent */}
-                <div className="mb-4 h-1 w-9 rounded-full bg-[#D6A84F]" />
-
-                {/* Heading */}
-                <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                  Create your account
-                </h1>
-
-                {/* Subtitle */}
-                <p className="mt-2 text-sm leading-6 text-white/75">
-                  Set up your SOMS account to get started.
-                </p>
-
-              </div>
-            </div>
-
-            {/* ==================================================
-                FORM CONTENT
-            ================================================== */}
-
-            <div className="px-7 py-7 sm:px-9 sm:py-8">
-
-              {/* Error */}
-              {error && (
-                <div className="mb-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-5 text-red-600">
-                  {error}
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7A1F2B]">
+                  <span className="text-lg font-black text-white">
+                    S
+                  </span>
                 </div>
-              )}
-
-              <form
-                onSubmit={handleSubmit}
-                className="space-y-5"
-              >
-
-                {/* NAME + EMAIL */}
-
-                <div className="grid gap-5 sm:grid-cols-2">
-
-                  {/* NAME */}
-                  <div>
-                    <label
-                      htmlFor="fullName"
-                      className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600"
-                    >
-                      Full name
-                    </label>
-
-                    <div className="group relative">
-
-                      <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
-
-                      <input
-                        id="fullName"
-                        type="text"
-                        value={fullName}
-                        onChange={(event) =>
-                          setFullName(
-                            event.target.value,
-                          )
-                        }
-                        placeholder="Your full name"
-                        autoComplete="name"
-                        disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-
-                    </div>
-                  </div>
-
-                  {/* EMAIL */}
-                  <div>
-                    <label
-                      htmlFor="registerEmail"
-                      className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600"
-                    >
-                      Email address
-                    </label>
-
-                    <div className="group relative">
-
-                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
-
-                      <input
-                        id="registerEmail"
-                        type="email"
-                        value={email}
-                        onChange={(event) =>
-                          setEmail(
-                            event.target.value,
-                          )
-                        }
-                        placeholder="you@company.com"
-                        autoComplete="email"
-                        disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-
-                    </div>
-                  </div>
-
-                </div>
-
-                {/* DEPARTMENT */}
 
                 <div>
+                  <p className="font-bold text-[#20252B]">
+                    SOMS
+                  </p>
 
-                  <label
-                    htmlFor="department"
-                    className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600"
-                  >
-                    Department
-                  </label>
-
-                  <div className="group relative">
-
-                    <Building2 className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
-
-                    <select
-                      id="department"
-                      value={department}
-                      onChange={(event) =>
-                        setDepartment(
-                          event.target
-                            .value as Department,
-                        )
-                      }
-                      disabled={loading}
-                      className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm font-medium text-slate-900 outline-none transition-all hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {departments.map(
-                        (item) => (
-                          <option
-                            key={item.value}
-                            value={item.value}
-                          >
-                            {item.label}
-                          </option>
-                        ),
-                      )}
-                    </select>
-
-                    <ArrowRight className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-slate-400" />
-
-                  </div>
+                  <p className="text-xs text-[#667085]">
+                    Sales & Order Management System
+                  </p>
                 </div>
 
-                {/* OTHER DEPARTMENT */}
+              </div>
 
-                {department === 'other' && (
-                  <div>
+              <p className="text-sm font-semibold text-[#7A1F2B]">
+                Account registration
+              </p>
 
-                    <label
-                      htmlFor="otherDepartment"
-                      className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600"
-                    >
-                      Department name
-                    </label>
+              <h1 className="mt-2 text-3xl font-bold text-[#20252B]">
+                Create your account
+              </h1>
 
-                    <div className="group relative">
+              <p className="mt-2 text-sm text-[#667085]">
+                Enter your information below to create
+                your SOMS account.
+              </p>
 
-                      <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
+            </div>
 
-                      <input
-                        id="otherDepartment"
-                        type="text"
-                        value={otherDepartment}
-                        onChange={(event) =>
-                          setOtherDepartment(
-                            event.target.value,
-                          )
-                        }
-                        placeholder="e.g. Kitchen, Catering, Operations"
-                        autoComplete="organization"
-                        disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-3 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
+            {/* ERROR */}
 
-                    </div>
-                  </div>
+            {error && (
+              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
+
+              {/* FULL NAME */}
+
+              <div>
+
+                <label
+                  htmlFor="fullName"
+                  className="mb-2 block text-sm font-semibold text-[#344054]"
+                >
+                  Full name
+                </label>
+
+                <div className="relative">
+
+                  <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+
+                  <input
+                    id="fullName"
+                    type="text"
+                    value={fullName}
+                    onChange={(event) =>
+                      setFullName(event.target.value)
+                    }
+                    placeholder="Enter your full name"
+                    disabled={loading}
+                    autoComplete="name"
+                    className="h-12 w-full rounded-xl border border-[#D0D5DD] bg-white pl-12 pr-4 text-sm outline-none transition focus:border-[#7A1F2B] focus:ring-2 focus:ring-[#7A1F2B]/10 disabled:bg-gray-100"
+                  />
+
+                </div>
+
+              </div>
+
+              {/* EMAIL */}
+
+              <div>
+
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-semibold text-[#344054]"
+                >
+                  Email address
+                </label>
+
+                <div className="relative">
+
+                  <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(event) =>
+                      setEmail(event.target.value)
+                    }
+                    placeholder="you@example.com"
+                    disabled={loading}
+                    autoComplete="email"
+                    className="h-12 w-full rounded-xl border border-[#D0D5DD] bg-white pl-12 pr-4 text-sm outline-none transition focus:border-[#7A1F2B] focus:ring-2 focus:ring-[#7A1F2B]/10 disabled:bg-gray-100"
+                  />
+
+                </div>
+
+              </div>
+
+              {/* DEPARTMENT */}
+
+              <div>
+
+                <label
+                  htmlFor="department"
+                  className="mb-2 block text-sm font-semibold text-[#344054]"
+                >
+                  Department
+                </label>
+
+                <div className="relative">
+
+                  <Building2 className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+
+                  <select
+                    id="department"
+                    value={department}
+                    onChange={(event) =>
+                      setDepartment(
+                        event.target.value as Department
+                      )
+                    }
+                    disabled={loading}
+                    className="h-12 w-full appearance-none rounded-xl border border-[#D0D5DD] bg-white pl-12 pr-4 text-sm outline-none transition focus:border-[#7A1F2B] focus:ring-2 focus:ring-[#7A1F2B]/10 disabled:bg-gray-100"
+                  >
+                    {departments.map((item) => (
+                      <option
+                        key={item.value}
+                        value={item.value}
+                      >
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+
+                </div>
+
+                <p className="mt-2 text-xs text-[#667085]">
+                  {
+                    departments.find(
+                      (item) =>
+                        item.value === department
+                    )?.description
+                  }
+                </p>
+
+              </div>
+
+              {/* PASSWORD */}
+
+              <div>
+
+                <label
+                  htmlFor="password"
+                  className="mb-2 block text-sm font-semibold text-[#344054]"
+                >
+                  Password
+                </label>
+
+                <div className="relative">
+
+                  <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+
+                  <input
+                    id="password"
+                    type={
+                      showPassword
+                        ? 'text'
+                        : 'password'
+                    }
+                    value={password}
+                    onChange={(event) =>
+                      setPassword(event.target.value)
+                    }
+                    placeholder="Create a password"
+                    disabled={loading}
+                    autoComplete="new-password"
+                    className="h-12 w-full rounded-xl border border-[#D0D5DD] bg-white pl-12 pr-12 text-sm outline-none transition focus:border-[#7A1F2B] focus:ring-2 focus:ring-[#7A1F2B]/10 disabled:bg-gray-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword(
+                        (value) => !value
+                      )
+                    }
+                    disabled={loading}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[#667085] hover:bg-gray-100"
+                    aria-label={
+                      showPassword
+                        ? 'Hide password'
+                        : 'Show password'
+                    }
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+
+                </div>
+
+                <p className="mt-2 text-xs text-[#667085]">
+                  Password must contain at least 6 characters.
+                </p>
+
+              </div>
+
+              {/* CONFIRM PASSWORD */}
+
+              <div>
+
+                <label
+                  htmlFor="confirmPassword"
+                  className="mb-2 block text-sm font-semibold text-[#344054]"
+                >
+                  Confirm password
+                </label>
+
+                <div className="relative">
+
+                  <ShieldCheck className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+
+                  <input
+                    id="confirmPassword"
+                    type={
+                      showConfirmPassword
+                        ? 'text'
+                        : 'password'
+                    }
+                    value={confirmPassword}
+                    onChange={(event) =>
+                      setConfirmPassword(
+                        event.target.value
+                      )
+                    }
+                    placeholder="Confirm your password"
+                    disabled={loading}
+                    autoComplete="new-password"
+                    className="h-12 w-full rounded-xl border border-[#D0D5DD] bg-white pl-12 pr-12 text-sm outline-none transition focus:border-[#7A1F2B] focus:ring-2 focus:ring-[#7A1F2B]/10 disabled:bg-gray-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowConfirmPassword(
+                        (value) => !value
+                      )
+                    }
+                    disabled={loading}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[#667085] hover:bg-gray-100"
+                    aria-label={
+                      showConfirmPassword
+                        ? 'Hide password'
+                        : 'Show password'
+                    }
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+
+                </div>
+
+              </div>
+
+              {/* SUBMIT */}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#7A1F2B] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#641923] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  <>
+                    Create account
+                    <ArrowRight className="h-5 w-5" />
+                  </>
                 )}
 
-                {/* PASSWORDS */}
+              </button>
 
-                <div className="grid gap-5 sm:grid-cols-2">
+            </form>
 
-                  {/* PASSWORD */}
-                  <div>
+            {/* LOGIN LINK */}
 
-                    <label
-                      htmlFor="registerPassword"
-                      className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600"
-                    >
-                      Password
-                    </label>
+            <div className="mt-8 text-center">
 
-                    <div className="group relative">
-
-                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
-
-                      <input
-                        id="registerPassword"
-                        type={
-                          showPassword
-                            ? 'text'
-                            : 'password'
-                        }
-                        value={password}
-                        onChange={(event) =>
-                          setPassword(
-                            event.target.value,
-                          )
-                        }
-                        placeholder="Create password"
-                        autoComplete="new-password"
-                        disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowPassword(
-                            (value) => !value,
-                          )
-                        }
-                        disabled={loading}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-[#6B1F2A]"
-                        aria-label={
-                          showPassword
-                            ? 'Hide password'
-                            : 'Show password'
-                        }
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4.5 w-4.5" />
-                        ) : (
-                          <Eye className="h-4.5 w-4.5" />
-                        )}
-                      </button>
-
-                    </div>
-                  </div>
-
-                  {/* CONFIRM PASSWORD */}
-                  <div>
-
-                    <label
-                      htmlFor="confirmPassword"
-                      className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600"
-                    >
-                      Confirm password
-                    </label>
-
-                    <div className="group relative">
-
-                      <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-[#6B1F2A]" />
-
-                      <input
-                        id="confirmPassword"
-                        type={
-                          showConfirmPassword
-                            ? 'text'
-                            : 'password'
-                        }
-                        value={confirmPassword}
-                        onChange={(event) =>
-                          setConfirmPassword(
-                            event.target.value,
-                          )
-                        }
-                        placeholder="Confirm password"
-                        autoComplete="new-password"
-                        disabled={loading}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-11 text-sm outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-[#6B1F2A] focus:bg-white focus:ring-4 focus:ring-[#6B1F2A]/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowConfirmPassword(
-                            (value) => !value,
-                          )
-                        }
-                        disabled={loading}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-[#6B1F2A]"
-                        aria-label={
-                          showConfirmPassword
-                            ? 'Hide password'
-                            : 'Show password'
-                        }
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4.5 w-4.5" />
-                        ) : (
-                          <Eye className="h-4.5 w-4.5" />
-                        )}
-                      </button>
-
-                    </div>
-                  </div>
-
-                </div>
-
-                {/* SUBMIT */}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#6B1F2A] px-5 text-sm font-bold text-white shadow-lg shadow-[#6B1F2A]/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#541722] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4.5 w-4.5 animate-spin" />
-                      Creating account...
-                    </>
-                  ) : (
-                    <>
-                      Create account
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </>
-                  )}
-                </button>
-
-              </form>
-
-              {/* LOGIN LINK */}
-
-              <div className="mt-6 border-t border-slate-100 pt-5 text-center">
-
-                <p className="text-sm text-slate-500">
-                  Already have an account?
-                </p>
+              <p className="text-sm text-[#667085]">
+                Already have an account?{' '}
 
                 <Link
                   to="/login"
-                  className="mt-1.5 inline-flex items-center gap-1 text-sm font-bold text-[#6B1F2A] transition hover:text-[#541722]"
+                  className="font-semibold text-[#7A1F2B] hover:underline"
                 >
                   Sign in
-                  <ArrowRight className="h-4 w-4" />
                 </Link>
 
-              </div>
+              </p>
 
             </div>
 
           </div>
 
-          {/* Footer */}
-          <p className="mt-5 text-center text-[11px] font-medium text-slate-400">
-            SOMS © 2026
-          </p>
-
-        </div>
+        </section>
 
       </div>
+
     </main>
   );
 }
