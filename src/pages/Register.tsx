@@ -1,3 +1,4 @@
+
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -64,7 +65,7 @@ export function Register() {
   const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
@@ -84,6 +85,11 @@ export function Register() {
       return;
     }
 
+    if (!cleanEmail.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     if (!password) {
       setError('Please create a password.');
       return;
@@ -91,7 +97,7 @@ export function Register() {
 
     if (password.length < 6) {
       setError(
-        'Password must contain at least 6 characters.'
+        'Password must contain at least 6 characters.',
       );
       return;
     }
@@ -110,11 +116,15 @@ export function Register() {
       setLoading(true);
 
       /*
-       * Create the Supabase authentication account.
+       * =====================================================
+       * CREATE SUPABASE AUTH ACCOUNT
+       * =====================================================
        *
-       * The selected department and user's name are stored
-       * in the authentication metadata.
+       * The database trigger created in Supabase will
+       * automatically create the corresponding profiles
+       * record using this metadata.
        */
+
       const {
         data,
         error: signUpError,
@@ -136,83 +146,43 @@ export function Register() {
 
       if (!data.user) {
         throw new Error(
-          'The account could not be created. Please try again.'
+          'The account could not be created. Please try again.',
         );
       }
 
       /*
-       * Create/update the application profile.
+       * =====================================================
+       * PROFILE CREATION
+       * =====================================================
        *
-       * This is safe when a database trigger already creates
-       * the profile because upsert uses the user's auth ID.
+       * DO NOT INSERT INTO profiles here.
+       *
+       * Supabase now handles this automatically through the
+       * database trigger:
+       *
+       * on_auth_user_created
+       *
+       * This prevents browser-side RLS problems.
        */
-      const {
-        error: profileError,
-      } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: data.user.id,
-            email: cleanEmail,
-            full_name: cleanName,
-            department,
-            role: 'user',
-            avatar_url: null,
-            is_active: true,
-            notification_preferences: {
-              order_updates: true,
-              new_orders: true,
-              completed_orders: true,
-            },
-            updated_at:
-              new Date().toISOString(),
-          },
-          {
-            onConflict: 'id',
-          }
-        );
-
-      if (profileError) {
-        console.error(
-          'Profile creation error:',
-          profileError
-        );
-
-        /*
-         * Do not leave the user sitting on the registration
-         * page when the Auth account itself was created.
-         */
-        throw new Error(
-          'Your account was created, but your profile could not be completed. Please contact the system administrator.'
-        );
-      }
 
       /*
-       * IMPORTANT:
+       * =====================================================
+       * SIGN OUT
+       * =====================================================
        *
-       * We deliberately sign the user out after registration.
-       *
-       * The required flow is:
-       *
-       * CREATE ACCOUNT
-       *       ↓
-       * LOGIN PAGE
-       *       ↓
-       * ENTER EMAIL + PASSWORD
-       *       ↓
-       * DEPARTMENT DASHBOARD
-       *
-       * Therefore registration never sends the user directly
-       * into Finance, Butchery or another dashboard.
+       * Registration should finish at the login page.
        */
+
       await supabase.auth.signOut();
+
+      /*
+       * =====================================================
+       * SUCCESS
+       * =====================================================
+       */
 
       setSuccess(true);
 
-      /*
-       * Give the user a short confirmation message and then
-       * return them to the normal login screen.
-       */
       setTimeout(() => {
         navigate('/login', {
           replace: true,
@@ -221,20 +191,24 @@ export function Register() {
             email: cleanEmail,
           },
         });
-      }, 1000);
+      }, 1200);
     } catch (err) {
       console.error(
-        'Registration error:',
-        err
+        '[SOMS] Registration error:',
+        err,
       );
 
-      setError(
-        getFriendlyError(err)
-      );
+      setError(getFriendlyError(err));
     } finally {
       setLoading(false);
     }
   };
+
+  /*
+   * =========================================================
+   * SUCCESS SCREEN
+   * =========================================================
+   */
 
   if (success) {
     return (
@@ -254,19 +228,26 @@ export function Register() {
           </p>
 
           <p className="mt-2 text-sm leading-6 text-[#667085]">
-            You will now be returned to the login page.
-            Please sign in using the email and password
-            you just created.
+            Your department has been assigned to your
+            account. Please sign in using the email and
+            password you just created.
           </p>
 
           <div className="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-[#287A52]">
             <Loader2 className="h-4 w-4 animate-spin" />
             Returning to login...
           </div>
+
         </div>
       </main>
     );
   }
+
+  /*
+   * =========================================================
+   * REGISTRATION PAGE
+   * =========================================================
+   */
 
   return (
     <main className="min-h-screen bg-[#F8F6F1] text-[#20252B]">
@@ -399,8 +380,6 @@ export function Register() {
 
             </div>
 
-            {/* ERROR */}
-
             {error && (
               <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
@@ -489,14 +468,14 @@ export function Register() {
 
                 <div className="relative">
 
-                  <Building2 className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+                  <Building2 className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
 
                   <select
                     id="department"
                     value={department}
                     onChange={(event) =>
                       setDepartment(
-                        event.target.value as Department
+                        event.target.value as Department,
                       )
                     }
                     disabled={loading}
@@ -518,7 +497,7 @@ export function Register() {
                   {
                     departments.find(
                       (item) =>
-                        item.value === department
+                        item.value === department,
                     )?.description
                   }
                 </p>
@@ -538,7 +517,7 @@ export function Register() {
 
                 <div className="relative">
 
-                  <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
 
                   <input
                     id="password"
@@ -561,7 +540,7 @@ export function Register() {
                     type="button"
                     onClick={() =>
                       setShowPassword(
-                        (value) => !value
+                        (value) => !value,
                       )
                     }
                     disabled={loading}
@@ -600,7 +579,7 @@ export function Register() {
 
                 <div className="relative">
 
-                  <ShieldCheck className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
+                  <ShieldCheck className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#98A2B3]" />
 
                   <input
                     id="confirmPassword"
@@ -612,7 +591,7 @@ export function Register() {
                     value={confirmPassword}
                     onChange={(event) =>
                       setConfirmPassword(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     placeholder="Confirm your password"
@@ -625,7 +604,7 @@ export function Register() {
                     type="button"
                     onClick={() =>
                       setShowConfirmPassword(
-                        (value) => !value
+                        (value) => !value,
                       )
                     }
                     disabled={loading}
@@ -700,3 +679,4 @@ export function Register() {
 }
 
 export default Register;
+
