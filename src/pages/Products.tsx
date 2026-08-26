@@ -1,3 +1,4 @@
+
 import {
   AlertTriangle,
   CheckCircle2,
@@ -6,6 +7,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   X,
   XCircle,
 } from 'lucide-react';
@@ -17,14 +19,12 @@ import {
   useState,
 } from 'react';
 
-import {
-  supabase,
-  getFriendlyError,
-} from '../lib/supabase';
+import type { FormEvent } from 'react';
 
-/* =========================================================
-   TYPES
-========================================================= */
+import {
+  getFriendlyError,
+  supabase,
+} from '../lib/supabase';
 
 type Product = {
   id: string;
@@ -33,11 +33,14 @@ type Product = {
   unit: string;
   is_active: boolean;
   created_at?: string;
+  quantity: number;
 };
 
-/* =========================================================
-   CONSTANTS
-========================================================= */
+type InventoryRecord = {
+  product_id: string;
+  quantity: number | string | null;
+  unit?: string | null;
+};
 
 const CATEGORIES = [
   'BEEF CUTS',
@@ -47,16 +50,27 @@ const CATEGORIES = [
 ];
 
 const UNITS = [
-  { value: 'kg', label: 'Kilogram (kg)' },
-  { value: 'piece', label: 'Piece' },
-  { value: 'unit', label: 'Unit' },
-  { value: 'litre', label: 'Litre (L)' },
-  { value: 'pack', label: 'Pack' },
+  {
+    value: 'kg',
+    label: 'Kilogram (kg)',
+  },
+  {
+    value: 'piece',
+    label: 'Piece',
+  },
+  {
+    value: 'unit',
+    label: 'Unit',
+  },
+  {
+    value: 'litre',
+    label: 'Litre (L)',
+  },
+  {
+    value: 'pack',
+    label: 'Pack',
+  },
 ];
-
-/* =========================================================
-   PRODUCT MODAL
-========================================================= */
 
 type ProductModalProps = {
   open: boolean;
@@ -81,12 +95,25 @@ function ProductModal({
   const isEditing = Boolean(product);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
 
     if (product) {
       setName(product.name || '');
-      setCategory(product.category || 'BEEF CUTS');
-      setUnit(product.unit || 'kg');
+
+      setCategory(
+        CATEGORIES.includes(product.category)
+          ? product.category
+          : 'BEEF CUTS',
+      );
+
+      setUnit(
+        UNITS.some((item) => item.value === product.unit)
+          ? product.unit
+          : 'kg',
+      );
+
       setIsActive(product.is_active !== false);
     } else {
       setName('');
@@ -98,10 +125,8 @@ function ProductModal({
     setError(null);
   }, [open, product]);
 
-  if (!open) return null;
-
   const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement>,
+    event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
@@ -112,23 +137,19 @@ function ProductModal({
       return;
     }
 
-    if (!category) {
-      setError('Please select a category.');
+    if (!CATEGORIES.includes(category)) {
+      setError('Please select a valid product category.');
       return;
     }
 
-    if (!unit) {
-      setError('Please select a unit.');
+    if (!UNITS.some((item) => item.value === unit)) {
+      setError('Please select a valid unit.');
       return;
     }
 
     try {
       setSaving(true);
       setError(null);
-
-      /* =====================================================
-         EDIT PRODUCT
-      ===================================================== */
 
       if (isEditing && product) {
         const { error: updateError } = await supabase
@@ -147,9 +168,6 @@ function ProductModal({
           );
         }
 
-        /*
-         * Keep inventory unit synchronized.
-         */
         const { error: inventoryError } = await supabase
           .from('inventory')
           .update({
@@ -164,13 +182,7 @@ function ProductModal({
             inventoryError,
           );
         }
-      }
-
-      /* =====================================================
-         CREATE PRODUCT
-      ===================================================== */
-
-      else {
+      } else {
         const {
           data: newProduct,
           error: productError,
@@ -183,7 +195,7 @@ function ProductModal({
             is_active: isActive,
           })
           .select(
-            'id, name, category, unit, is_active',
+            'id, name, category, unit, is_active, created_at',
           )
           .single();
 
@@ -199,9 +211,6 @@ function ProductModal({
           );
         }
 
-        /*
-         * Create initial inventory record.
-         */
         const { error: inventoryError } = await supabase
           .from('inventory')
           .insert({
@@ -218,19 +227,14 @@ function ProductModal({
             inventoryError,
           );
 
-          /*
-           * Roll back product creation if inventory
-           * initialization fails.
-           */
           await supabase
             .from('products')
             .delete()
             .eq('id', newProduct.id);
 
           throw new Error(
-            `Product could not be initialized in inventory. ${getFriendlyError(
-              inventoryError,
-            )}`,
+            'Product could not be initialized in inventory. ' +
+              getFriendlyError(inventoryError),
           );
         }
       }
@@ -238,10 +242,7 @@ function ProductModal({
       await onSaved();
       onClose();
     } catch (err) {
-      console.error(
-        'Unable to save product:',
-        err,
-      );
+      console.error('Unable to save product:', err);
 
       setError(
         err instanceof Error
@@ -253,17 +254,17 @@ function ProductModal({
     }
   };
 
+  if (!open) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-
-        {/* HEADER */}
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-              {isEditing
-                ? 'Edit Product'
-                : 'Add Product'}
+              {isEditing ? 'Edit Product' : 'Add Product'}
             </h2>
 
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -277,13 +278,13 @@ function ProductModal({
             type="button"
             onClick={onClose}
             disabled={saving}
+            aria-label="Close"
             className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className="space-y-5 p-6"
@@ -291,11 +292,11 @@ function ProductModal({
           {error && (
             <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+
               <span>{error}</span>
             </div>
           )}
 
-          {/* PRODUCT NAME */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
               Product Name
@@ -304,16 +305,16 @@ function ProductModal({
             <input
               type="text"
               value={name}
-              onChange={(event) =>
-                setName(event.target.value)
-              }
-              placeholder="e.g. Pork Sausage"
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+              placeholder="e.g. Beef Fillet"
               autoFocus
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              disabled={saving}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             />
           </div>
 
-          {/* CATEGORY */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
               Category
@@ -321,23 +322,20 @@ function ProductModal({
 
             <select
               value={category}
-              onChange={(event) =>
-                setCategory(event.target.value)
-              }
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              onChange={(event) => {
+                setCategory(event.target.value);
+              }}
+              disabled={saving}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             >
               {CATEGORIES.map((item) => (
-                <option
-                  key={item}
-                  value={item}
-                >
+                <option key={item} value={item}>
                   {item}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* UNIT */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
               Unit
@@ -345,10 +343,11 @@ function ProductModal({
 
             <select
               value={unit}
-              onChange={(event) =>
-                setUnit(event.target.value)
-              }
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              onChange={(event) => {
+                setUnit(event.target.value);
+              }}
+              disabled={saving}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             >
               {UNITS.map((item) => (
                 <option
@@ -361,17 +360,15 @@ function ProductModal({
             </select>
           </div>
 
-          {/* ACTIVE */}
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50">
             <input
               type="checkbox"
               checked={isActive}
-              onChange={(event) =>
-                setIsActive(
-                  event.target.checked,
-                )
-              }
-              className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              onChange={(event) => {
+                setIsActive(event.target.checked);
+              }}
+              disabled={saving}
+              className="mt-1 h-5 w-5 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
             />
 
             <div>
@@ -380,12 +377,12 @@ function ProductModal({
               </div>
 
               <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Active products can be used when creating orders.
+                Active products can be used when creating
+                orders.
               </div>
             </div>
           </label>
 
-          {/* ACTIONS */}
           <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
             <button
               type="button"
@@ -399,7 +396,7 @@ function ProductModal({
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-400"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-700 dark:hover:bg-slate-600"
             >
               {saving ? (
                 <>
@@ -409,7 +406,6 @@ function ProductModal({
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-
                   {isEditing
                     ? 'Save Changes'
                     : 'Save Product'}
@@ -423,35 +419,17 @@ function ProductModal({
   );
 }
 
-/* =========================================================
-   PRODUCTS PAGE
-========================================================= */
-
 export function Products() {
-  const [products, setProducts] =
-    useState<Product[]>([]);
-
-  const [search, setSearch] =
-    useState('');
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  const [modalOpen, setModalOpen] =
-    useState(false);
-
+  const [products, setProducts] = useState<Product[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<Product | null>(null);
-
-  /* =======================================================
-     LOAD PRODUCTS
-  ======================================================= */
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
 
   const loadProducts = useCallback(
     async (showLoading = true) => {
@@ -463,8 +441,8 @@ export function Products() {
         setError(null);
 
         const {
-          data,
-          error: fetchError,
+          data: productData,
+          error: productError,
         } = await supabase
           .from('products')
           .select(
@@ -474,15 +452,65 @@ export function Products() {
             ascending: true,
           });
 
-        if (fetchError) {
+        if (productError) {
           throw new Error(
-            getFriendlyError(fetchError),
+            getFriendlyError(productError),
           );
         }
 
-        setProducts(
-          (data || []) as Product[],
+        const {
+          data: inventoryData,
+          error: inventoryError,
+        } = await supabase
+          .from('inventory')
+          .select('product_id, quantity, unit');
+
+        if (inventoryError) {
+          console.warn(
+            'Unable to load inventory:',
+            inventoryError,
+          );
+        }
+
+        const inventoryMap = new Map<
+          string,
+          InventoryRecord
+        >();
+
+        (inventoryData || []).forEach(
+          (record: InventoryRecord) => {
+            if (record.product_id) {
+              inventoryMap.set(
+                record.product_id,
+                record,
+              );
+            }
+          },
         );
+
+        const normalizedProducts: Product[] =
+          (productData || []).map((item) => {
+            const inventory = inventoryMap.get(item.id);
+
+            return {
+              id: item.id,
+              name: item.name || '',
+              category:
+                item.category || 'BEEF CUTS',
+              unit:
+                item.unit ||
+                inventory?.unit ||
+                'unit',
+              is_active:
+                item.is_active !== false,
+              created_at: item.created_at,
+              quantity: Number(
+                inventory?.quantity ?? 0,
+              ),
+            };
+          });
+
+        setProducts(normalizedProducts);
       } catch (err) {
         console.error(
           'Unable to load products:',
@@ -506,14 +534,8 @@ export function Products() {
     void loadProducts(true);
   }, [loadProducts]);
 
-  /* =======================================================
-     SEARCH
-  ======================================================= */
-
   const filteredProducts = useMemo(() => {
-    const value = search
-      .trim()
-      .toLowerCase();
+    const value = search.trim().toLowerCase();
 
     if (!value) {
       return products;
@@ -533,62 +555,140 @@ export function Products() {
     );
   }, [products, search]);
 
-  /* =======================================================
-     STATS
-  ======================================================= */
+  const totalProducts = products.length;
 
-  const totalProducts =
-    products.length;
+  const activeProducts = products.filter(
+    (product) => product.is_active,
+  ).length;
 
-  const activeProducts =
-    products.filter(
-      (product) => product.is_active,
-    ).length;
-
-  const inactiveProducts =
-    products.filter(
-      (product) => !product.is_active,
-    ).length;
-
-  /* =======================================================
-     MODAL
-  ======================================================= */
+  const inactiveProducts = products.filter(
+    (product) => !product.is_active,
+  ).length;
 
   const openAddProduct = () => {
     setSelectedProduct(null);
     setModalOpen(true);
   };
 
-  const openEditProduct = (
-    product: Product,
-  ) => {
+  const openEditProduct = (product: Product) => {
     setSelectedProduct(product);
     setModalOpen(true);
   };
 
   const closeProductModal = () => {
+    if (deletingId) {
+      return;
+    }
+
     setModalOpen(false);
     setSelectedProduct(null);
   };
 
-  /* =======================================================
-     REFRESH
-  ======================================================= */
+  const deleteProduct = async (
+    product: Product,
+  ) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to permanently delete "' +
+        product.name +
+        '"?\n\nThis action cannot be undone.',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(product.id);
+      setError(null);
+
+      const {
+        error: inventoryDeleteError,
+      } = await supabase
+        .from('inventory')
+        .delete()
+        .eq('product_id', product.id);
+
+      if (inventoryDeleteError) {
+        throw new Error(
+          'Unable to delete the inventory record for "' +
+            product.name +
+            '". ' +
+            getFriendlyError(inventoryDeleteError),
+        );
+      }
+
+      const {
+        error: productDeleteError,
+      } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', product.id);
+
+      if (productDeleteError) {
+        throw new Error(
+          'Unable to permanently delete "' +
+            product.name +
+            '". ' +
+            getFriendlyError(productDeleteError),
+        );
+      }
+
+      setProducts((current) =>
+        current.filter(
+          (item) => item.id !== product.id,
+        ),
+      );
+    } catch (err) {
+      console.error(
+        'Unable to delete product:',
+        err,
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to delete product.',
+      );
+
+      await loadProducts(false);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleRefresh = async () => {
+    if (refreshing) {
+      return;
+    }
+
     setRefreshing(true);
     await loadProducts(false);
   };
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
+  const formatQuantity = (
+    quantity: number,
+    unit: string,
+  ) => {
+    const safeQuantity =
+      Number.isFinite(quantity)
+        ? quantity
+        : 0;
+
+    const formatted =
+      Number.isInteger(safeQuantity)
+        ? safeQuantity.toString()
+        : safeQuantity
+            .toFixed(2)
+            .replace(/\.?0+$/, '');
+
+    return formatted + ' ' + unit;
+  };
 
   if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-emerald-600" />
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-slate-700" />
 
           <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
             Loading products...
@@ -598,18 +698,12 @@ export function Products() {
     );
   }
 
-  /* =======================================================
-     PAGE
-  ======================================================= */
-
   return (
     <>
       <div className="soms-page space-y-6">
-
-        {/* HEADER */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 text-white shadow-sm">
               <Package className="h-5 w-5" />
             </div>
 
@@ -619,14 +713,13 @@ export function Products() {
               </h1>
 
               <p className="soms-page-description">
-                Manage products available
-                for ordering and sales.
+                Manage products, stock quantities,
+                and product availability.
               </p>
             </div>
           </div>
 
           <div className="flex gap-2">
-            {/* REFRESH */}
             <button
               type="button"
               onClick={handleRefresh}
@@ -635,21 +728,19 @@ export function Products() {
             >
               <RefreshCw
                 className={
-                  `h-4 w-4 ` +
+                  'h-4 w-4' +
                   (refreshing
-                    ? 'animate-spin'
+                    ? ' animate-spin'
                     : '')
                 }
               />
-
               Refresh
             </button>
 
-            {/* ADD PRODUCT */}
             <button
               type="button"
               onClick={openAddProduct}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-700 active:bg-slate-900"
             >
               <Plus className="h-4 w-4" />
               Add Product
@@ -657,7 +748,6 @@ export function Products() {
           </div>
         </div>
 
-        {/* ERROR */}
         {error && (
           <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/20">
             <div className="flex items-center gap-3">
@@ -671,6 +761,7 @@ export function Products() {
             <button
               type="button"
               onClick={() => setError(null)}
+              aria-label="Dismiss error"
               className="rounded-lg p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-950/40"
             >
               <X className="h-4 w-4" />
@@ -678,9 +769,7 @@ export function Products() {
           </div>
         )}
 
-        {/* STATS */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-
           <div className="soms-stat-card">
             <div className="flex items-center justify-between">
               <div>
@@ -693,7 +782,7 @@ export function Products() {
                 </div>
               </div>
 
-              <Package className="h-6 w-6 text-blue-600" />
+              <Package className="h-6 w-6 text-slate-700" />
             </div>
           </div>
 
@@ -709,7 +798,7 @@ export function Products() {
                 </div>
               </div>
 
-              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+              <CheckCircle2 className="h-6 w-6 text-slate-700" />
             </div>
           </div>
 
@@ -728,51 +817,38 @@ export function Products() {
               <XCircle className="h-6 w-6 text-red-600" />
             </div>
           </div>
-
         </div>
 
-        {/* PRODUCT CATALOGUE */}
         <div className="soms-card overflow-hidden">
-
           <div className="soms-card-header flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-
             <div>
-              <h3>
-                Product Catalogue
-              </h3>
+              <h3>Product Catalogue</h3>
 
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Products created here can
-                be used for orders and
-                inventory.
+                Products created here can be used
+                for orders and inventory.
               </p>
             </div>
 
-            {/* SEARCH */}
             <div className="relative w-full lg:w-[320px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
               <input
                 className="soms-input w-full"
                 value={search}
-                onChange={(event) =>
-                  setSearch(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                }}
                 placeholder="Search products..."
                 style={{
                   paddingLeft: 38,
                 }}
               />
             </div>
-
           </div>
 
-          {/* EMPTY STATE */}
           {filteredProducts.length === 0 ? (
             <div className="flex min-h-[320px] flex-col items-center justify-center px-5 text-center">
-
               <Package className="h-12 w-12 text-slate-300 dark:text-slate-700" />
 
               <h3 className="mt-4 font-semibold text-slate-800 dark:text-slate-200">
@@ -791,34 +867,29 @@ export function Products() {
                 <button
                   type="button"
                   onClick={openAddProduct}
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-700"
                 >
                   <Plus className="h-4 w-4" />
                   Add Product
                 </button>
               )}
-
             </div>
           ) : (
             <>
-
-              {/* =================================================
-                 DESKTOP TABLE
-              ================================================= */}
-
               <div className="hidden overflow-x-auto md:block">
-
                 <table className="w-full">
-
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
-
                       <th className="px-5 py-4">
                         Product
                       </th>
 
                       <th className="px-5 py-4">
                         Category
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Quantity
                       </th>
 
                       <th className="px-5 py-4">
@@ -832,24 +903,19 @@ export function Products() {
                       <th className="px-5 py-4 text-right">
                         Actions
                       </th>
-
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-
                     {filteredProducts.map(
                       (product) => (
                         <tr
                           key={product.id}
                           className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
                         >
-
-                          {/* PRODUCT */}
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
-
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-white">
                                 <Package className="h-5 w-5" />
                               </div>
 
@@ -866,25 +932,29 @@ export function Products() {
                                   )}
                                 </div>
                               </div>
-
                             </div>
                           </td>
 
-                          {/* CATEGORY */}
                           <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
                             {product.category}
                           </td>
 
-                          {/* UNIT */}
+                          <td className="px-5 py-4">
+                            <span className="inline-flex items-center rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                              {formatQuantity(
+                                product.quantity,
+                                product.unit,
+                              )}
+                            </span>
+                          </td>
+
                           <td className="px-5 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200">
                             {product.unit}
                           </td>
 
-                          {/* STATUS */}
                           <td className="px-5 py-4">
-
                             {product.is_active ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                                 Active
                               </span>
@@ -894,55 +964,69 @@ export function Products() {
                                 Inactive
                               </span>
                             )}
-
                           </td>
 
-                          {/* ACTIONS — EDIT ONLY */}
                           <td className="px-5 py-4">
-
-                            <div className="flex justify-end">
-
+                            <div className="flex justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() =>
+                                onClick={() => {
                                   openEditProduct(
                                     product,
-                                  )
+                                  );
+                                }}
+                                disabled={
+                                  deletingId ===
+                                  product.id
                                 }
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                               >
                                 <Edit3 className="h-3.5 w-3.5" />
                                 Edit
                               </button>
 
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void deleteProduct(
+                                    product,
+                                  );
+                                }}
+                                disabled={
+                                  deletingId ===
+                                  product.id
+                                }
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                              >
+                                {deletingId ===
+                                product.id ? (
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+
+                                {deletingId ===
+                                product.id
+                                  ? 'Deleting...'
+                                  : 'Delete'}
+                              </button>
                             </div>
-
                           </td>
-
                         </tr>
                       ),
                     )}
-
                   </tbody>
                 </table>
-
               </div>
 
-              {/* =================================================
-                 MOBILE
-              ================================================= */}
-
               <div className="grid gap-3 p-3 md:hidden">
-
                 {filteredProducts.map(
                   (product) => (
                     <div
                       key={product.id}
                       className="rounded-xl border border-slate-200 p-4 dark:border-slate-800"
                     >
-
                       <div className="flex items-start justify-between gap-3">
-
                         <div>
                           <h3 className="font-bold text-slate-900 dark:text-white">
                             {product.name}
@@ -954,21 +1038,32 @@ export function Products() {
                         </div>
 
                         <span
-                          className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                          className={
                             product.is_active
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
+                              ? 'rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-700'
+                              : 'rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600'
+                          }
                         >
                           {product.is_active
                             ? 'ACTIVE'
                             : 'INACTIVE'}
                         </span>
-
                       </div>
 
                       <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+                        <p className="text-[10px] font-semibold uppercase text-slate-400">
+                          Current Quantity
+                        </p>
 
+                        <p className="mt-1 text-lg font-black text-slate-800 dark:text-white">
+                          {formatQuantity(
+                            product.quantity,
+                            product.unit,
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
                         <p className="text-[10px] font-semibold uppercase text-slate-400">
                           Unit
                         </p>
@@ -976,42 +1071,60 @@ export function Products() {
                         <p className="mt-1 font-bold text-slate-900 dark:text-white">
                           {product.unit}
                         </p>
-
                       </div>
 
-                      {/* EDIT ONLY */}
-                      <div className="mt-3">
-
+                      <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
                             openEditProduct(
                               product,
-                            )
+                            );
+                          }}
+                          disabled={
+                            deletingId ===
+                            product.id
                           }
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                           Edit
                         </button>
 
-                      </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void deleteProduct(
+                              product,
+                            );
+                          }}
+                          disabled={
+                            deletingId ===
+                            product.id
+                          }
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                          {deletingId ===
+                          product.id ? (
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
 
+                          {deletingId ===
+                          product.id
+                            ? 'Deleting...'
+                            : 'Delete'}
+                        </button>
+                      </div>
                     </div>
                   ),
                 )}
-
               </div>
-
             </>
           )}
-
         </div>
       </div>
-
-      {/* =======================================================
-         ADD / EDIT MODAL
-      ======================================================= */}
 
       <ProductModal
         open={modalOpen}
@@ -1026,3 +1139,4 @@ export function Products() {
 }
 
 export default Products;
+

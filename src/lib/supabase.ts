@@ -221,15 +221,7 @@ export function getFriendlyError(
     return 'Invalid email or password.';
   }
 
-  if (
-    lowerMessage.includes(
-      'email not confirmed'
-    )
-  ) {
-    return (
-      'Please confirm your email address before signing in.'
-    );
-  }
+
 
   if (
     lowerMessage.includes('jwt') ||

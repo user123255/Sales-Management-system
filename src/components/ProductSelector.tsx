@@ -610,14 +610,6 @@ export function ProductSelector({
                   <option value="piece">
                     piece
                   </option>
-
-                  <option value="box">
-                    box
-                  </option>
-
-                  <option value="bag">
-                    bag
-                  </option>
                 </select>
               </div>
 

@@ -1,6 +1,13 @@
-export type Department = 'finance' | 'butchery' | 'other';
 
-export type UserRole = 'user' | 'manager' | 'admin';
+export type Department =
+  | 'finance'
+  | 'butchery'
+  | 'other';
+
+export type UserRole =
+  | 'user'
+  | 'manager'
+  | 'admin';
 
 export type OrderStatus =
   | 'pending'
@@ -27,12 +34,16 @@ export type InventoryStatus =
   | 'low_stock'
   | 'out_of_stock';
 
+/*
+ * PAYMENT METHODS
+ *
+ * SOMS uses only:
+ * 1. Cash
+ * 2. Transfer
+ */
 export type PaymentMethod =
-  | 'bank_transfer'
   | 'cash'
-  | 'ecobank'
-  | 'mobile_money'
-  | 'other';
+  | 'transfer';
 
 export interface Profile {
   id: string;
@@ -77,48 +88,29 @@ export interface Order {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
-
   creator?: Profile;
-
   items?: OrderItem[];
-
   status_history?: OrderStatusHistory[];
 }
 
 export interface OrderItem {
   id: string;
   order_id: string;
-
   product_id: string | null;
-
   product_name: string;
-
   quantity: number;
-
   unit: string;
-
   price: number;
-
   packaging: string | null;
-
   notes: string | null;
-
   is_prepared: boolean;
 
-  created_at: string;
-
   /* Butchery response */
-
   available_quantity: number | null;
-
   accepted_quantity: number | null;
-
   butchery_note: string | null;
-
   responded_at: string | null;
-
   responded_by: string | null;
-
   response_status: OrderItemResponseStatus;
 
   responder?: Profile;
@@ -126,17 +118,11 @@ export interface OrderItem {
 
 export interface OrderStatusHistory {
   id: string;
-
   order_id: string;
-
   status: OrderStatus;
-
   changed_by: string;
-
   department: Department;
-
   comment: string | null;
-
   created_at: string;
 
   changer?: Profile;
@@ -144,85 +130,52 @@ export interface OrderStatusHistory {
 
 export interface Notification {
   id: string;
-
   user_id: string;
-
   type: string;
-
   title: string;
-
   message: string;
-
   order_id: string | null;
-
   is_read: boolean;
-
   created_at: string;
 }
 
 export interface Invoice {
   id: string;
-
   invoice_number: string;
-
   order_id: string | null;
-
   customer_name: string;
-
   customer_contact: string | null;
-
   subtotal: number;
-
   total: number;
-
   amount_paid: number;
-
   balance: number;
-
   status: InvoiceStatus;
-
   due_date: string;
-
   notes: string | null;
-
   created_by: string;
-
   created_at: string;
-
   updated_at: string;
 
   items?: InvoiceItem[];
-
   order?: Order;
 }
 
 export interface InvoiceItem {
   id: string;
-
   invoice_id: string;
-
   product_name: string;
-
   quantity: number;
-
   unit: string;
-
   price: number;
-
   total: number;
 }
 
 export interface Debtor {
   id: string;
-
   customer_name: string;
-
   contact: string | null;
-
   total_balance: number;
-
   created_at: string;
-
   updated_at: string;
 
   invoices?: Invoice[];
@@ -230,33 +183,27 @@ export interface Debtor {
 
 export interface Payment {
   id: string;
-
   invoice_id: string;
-
   payment_method: PaymentMethod;
-
   amount: number;
-
   reference: string | null;
-
   payment_date: string;
-
   recorded_by: string;
-
   created_at: string;
 }
 
+/*
+ * INVENTORY
+ *
+ * inventory_number is nullable in the actual database.
+ */
 export interface InventoryItem {
   id: string;
-
+  inventory_number: string | null;
   product_id: string;
-
   quantity: number;
-
   unit: string;
-
   low_stock_threshold: number;
-
   updated_at: string;
 
   product?: Product;
@@ -264,84 +211,54 @@ export interface InventoryItem {
 
 export interface OrganizationSettings {
   id: string;
-
   name: string;
-
   currency: string;
-
   date_format: string;
-
   allow_negative_inventory: boolean;
-
   updated_at: string;
 }
 
 export interface CreateOrderItemInput {
   product_id: string | null;
-
   product_name: string;
-
   quantity: number;
-
   unit: string;
-
   price: number;
-
   packaging: string;
-
   notes: string;
 }
 
 export interface CreateOrderInput {
   notes: string;
-
   customer_name: string;
-
   delivery_info: string;
-
   items: CreateOrderItemInput[];
 }
 
 export interface ReportSummary {
   totalOrders: number;
-
   totalSales: number;
-
   completedOrders: number;
-
   pendingOrders: number;
-
   outstandingAmount: number;
 }
 
 export interface ProductPerformance {
   product_name: string;
-
   total_quantity: number;
-
   total_sales: number;
-
   order_count: number;
 }
 
 export interface DepartmentActivity {
   department: string;
-
   order_count: number;
-
   total_sales: number;
 }
 
-export interface InventoryItem {
-  id: string;
-  inventory_number: string;
-  product_id: string;
-  quantity: number;
-  unit: string;
-  low_stock_threshold: number;
-  updated_at: string;
-  product?: Product;
-}
+/* =========================================================
+   CONSTANTS
+========================================================= */
 
 export const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -352,7 +269,10 @@ export const ORDER_STATUSES: OrderStatus[] = [
   'cancelled',
 ];
 
-export const STATUS_LABELS: Record<OrderStatus, string> = {
+export const STATUS_LABELS: Record<
+  OrderStatus,
+  string
+> = {
   pending: 'Pending',
   accepted: 'Accepted',
   processing: 'Processing',
@@ -361,23 +281,32 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
   cancelled: 'Cancelled',
 };
 
-export const DEPARTMENT_LABELS: Record<Department, string> = {
+export const DEPARTMENT_LABELS: Record<
+  Department,
+  string
+> = {
   finance: 'Finance',
   butchery: 'Butchery',
   other: 'Other',
 };
 
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  bank_transfer: 'Bank Transfer',
+/*
+ * PAYMENT LABELS
+ *
+ * Only Cash and Transfer.
+ */
+export const PAYMENT_METHOD_LABELS: Record<
+  PaymentMethod,
+  string
+> = {
   cash: 'Cash',
-  ecobank: 'Ecobank',
-  mobile_money: 'Mobile Money',
-  other: 'Other',
+  transfer: 'Transfer',
 };
 
 export const PRODUCT_CATEGORIES = [
-  'Beef Cuts',
-  'Pork Cuts',
-  'Quarters',
-  'Processed Products',
+  'BEEF CUTS',
+  'PORK CUTS',
+  'QUARTERS',
+  'PROCESSED PRODUCTS',
 ] as const;
+

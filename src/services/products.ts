@@ -1,3 +1,5 @@
+
+
 import {
   supabase,
   getFriendlyError,
@@ -49,7 +51,8 @@ function cleanCategory(category: string): string {
   const value = category.trim();
 
   const match = PRODUCT_CATEGORIES.find(
-    (item) => item.toLowerCase() === value.toLowerCase(),
+    (item) =>
+      item.toLowerCase() === value.toLowerCase(),
   );
 
   return match ?? value.toUpperCase();
@@ -83,7 +86,9 @@ export async function fetchProducts(
   const { data, error } = await query;
 
   if (error) {
-    throw new Error(getFriendlyError(error));
+    throw new Error(
+      getFriendlyError(error),
+    );
   }
 
   return (data ?? []) as Product[];
@@ -104,11 +109,17 @@ export async function fetchAllProducts(): Promise<Product[]> {
 export async function fetchProductsByCategory(): Promise<
   Record<string, Product[]>
 > {
-  const products = await fetchProducts(true);
+  const products =
+    await fetchProducts(true);
 
-  return products.reduce<Record<string, Product[]>>(
+  return products.reduce<
+    Record<string, Product[]>
+  >(
     (groups, product) => {
-      const category = cleanCategory(product.category);
+      const category =
+        cleanCategory(
+          product.category,
+        );
 
       if (!groups[category]) {
         groups[category] = [];
@@ -135,14 +146,19 @@ export async function fetchProductById(
     return null;
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('products')
     .select('*')
     .eq('id', id)
     .maybeSingle();
 
   if (error) {
-    throw new Error(getFriendlyError(error));
+    throw new Error(
+      getFriendlyError(error),
+    );
   }
 
   return data as Product | null;
@@ -152,38 +168,69 @@ export async function fetchProductById(
    CREATE PRODUCT
 ========================================================= */
 
+/*
+ * IMPORTANT:
+ *
+ * Creating a product does NOT create an inventory
+ * record with quantity 0.
+ *
+ * The product exists in the products table only.
+ *
+ * Inventory is created when stock is actually added.
+ */
+
 export async function createProduct(input: {
   name: string;
   category: string;
   unit: string;
   is_active?: boolean;
 }): Promise<Product> {
-  const name = input.name.trim();
-  const category = cleanCategory(input.category);
-  const unit = cleanUnit(input.unit);
-  const isActive = input.is_active !== false;
+  const name =
+    input.name.trim();
+
+  const category =
+    cleanCategory(
+      input.category,
+    );
+
+  const unit =
+    cleanUnit(
+      input.unit,
+    );
+
+  const isActive =
+    input.is_active !== false;
 
   if (!name) {
-    throw new Error('Product name is required.');
+    throw new Error(
+      'Product name is required.',
+    );
   }
 
   if (!category) {
-    throw new Error('Product category is required.');
+    throw new Error(
+      'Product category is required.',
+    );
   }
 
   if (!unit) {
-    throw new Error('Product unit is required.');
+    throw new Error(
+      'Product unit is required.',
+    );
   }
 
-  /* Check for duplicate product name */
+  /* -------------------------------------------------------
+     CHECK DUPLICATE PRODUCT
+  ------------------------------------------------------- */
+
   const {
-    data: existingProduct,
-    error: duplicateCheckError,
+    data: existingProducts,
+    error:
+      duplicateCheckError,
   } = await supabase
     .from('products')
     .select('id, name')
-    .ilike('name', name)
-    .maybeSingle();
+    .ilike('name', name);
 
   if (duplicateCheckError) {
     throw new Error(
@@ -193,13 +240,19 @@ export async function createProduct(input: {
     );
   }
 
-  if (existingProduct) {
+  if (
+    existingProducts &&
+    existingProducts.length > 0
+  ) {
     throw new Error(
       `A product named "${name}" already exists.`,
     );
   }
 
-  /* Create product */
+  /* -------------------------------------------------------
+     CREATE PRODUCT ONLY
+  ------------------------------------------------------- */
+
   const {
     data,
     error,
@@ -215,7 +268,9 @@ export async function createProduct(input: {
     .single();
 
   if (error) {
-    throw new Error(getFriendlyError(error));
+    throw new Error(
+      getFriendlyError(error),
+    );
   }
 
   if (!data?.id) {
@@ -224,32 +279,12 @@ export async function createProduct(input: {
     );
   }
 
-  /* Create matching inventory record */
-  const {
-    error: inventoryError,
-  } = await supabase
-    .from('inventory')
-    .insert({
-      product_id: data.id,
-      quantity: 0,
-      unit,
-      low_stock_threshold: 10,
-      updated_at: new Date().toISOString(),
-    });
-
-  if (inventoryError) {
-    /* Attempt rollback */
-    await supabase
-      .from('products')
-      .delete()
-      .eq('id', data.id);
-
-    throw new Error(
-      `Product was created, but its inventory record could not be created. ${getFriendlyError(
-        inventoryError,
-      )}`,
-    );
-  }
+  /*
+   * DO NOT create inventory here.
+   *
+   * This prevents new products from automatically
+   * appearing as "0 kg" inventory.
+   */
 
   return data as Product;
 }
@@ -263,20 +298,37 @@ export async function updateProduct(
   updates: Partial<
     Pick<
       Product,
-      'name' | 'category' | 'unit' | 'is_active'
+      | 'name'
+      | 'category'
+      | 'unit'
+      | 'is_active'
     >
   >,
 ): Promise<Product> {
-  const productId = id?.trim();
+  const productId =
+    id?.trim();
 
   if (!productId) {
-    throw new Error('Product ID is required.');
+    throw new Error(
+      'Product ID is required.',
+    );
   }
 
-  const cleanedUpdates: Record<string, unknown> = {};
+  const cleanedUpdates: Record<
+    string,
+    unknown
+  > = {};
 
-  if (typeof updates.name === 'string') {
-    const name = updates.name.trim();
+  /* -------------------------------------------------------
+     NAME
+  ------------------------------------------------------- */
+
+  if (
+    typeof updates.name ===
+    'string'
+  ) {
+    const name =
+      updates.name.trim();
 
     if (!name) {
       throw new Error(
@@ -284,13 +336,53 @@ export async function updateProduct(
       );
     }
 
-    cleanedUpdates.name = name;
+    /*
+     * Check whether another product
+     * already has this name.
+     */
+    const {
+      data: duplicates,
+      error:
+        duplicateError,
+    } = await supabase
+      .from('products')
+      .select('id, name')
+      .ilike('name', name)
+      .neq('id', productId);
+
+    if (duplicateError) {
+      throw new Error(
+        `Unable to check product name. ${getFriendlyError(
+          duplicateError,
+        )}`,
+      );
+    }
+
+    if (
+      duplicates &&
+      duplicates.length > 0
+    ) {
+      throw new Error(
+        `A product named "${name}" already exists.`,
+      );
+    }
+
+    cleanedUpdates.name =
+      name;
   }
 
-  if (typeof updates.category === 'string') {
-    const category = cleanCategory(
-      updates.category,
-    );
+  /* -------------------------------------------------------
+     CATEGORY
+  ------------------------------------------------------- */
+
+  if (
+    typeof updates.category ===
+    'string'
+  ) {
+    const category =
+      cleanCategory(
+        updates.category,
+      );
 
     if (!category) {
       throw new Error(
@@ -298,11 +390,22 @@ export async function updateProduct(
       );
     }
 
-    cleanedUpdates.category = category;
+    cleanedUpdates.category =
+      category;
   }
 
-  if (typeof updates.unit === 'string') {
-    const unit = cleanUnit(updates.unit);
+  /* -------------------------------------------------------
+     UNIT
+  ------------------------------------------------------- */
+
+  if (
+    typeof updates.unit ===
+    'string'
+  ) {
+    const unit =
+      cleanUnit(
+        updates.unit,
+      );
 
     if (!unit) {
       throw new Error(
@@ -310,41 +413,70 @@ export async function updateProduct(
       );
     }
 
-    cleanedUpdates.unit = unit;
+    cleanedUpdates.unit =
+      unit;
   }
 
-  if (typeof updates.is_active === 'boolean') {
+  /* -------------------------------------------------------
+     ACTIVE STATUS
+  ------------------------------------------------------- */
+
+  if (
+    typeof updates.is_active ===
+    'boolean'
+  ) {
     cleanedUpdates.is_active =
       updates.is_active;
   }
 
-  if (Object.keys(cleanedUpdates).length === 0) {
+  if (
+    Object.keys(
+      cleanedUpdates,
+    ).length === 0
+  ) {
     throw new Error(
       'No product changes were provided.',
     );
   }
 
-  /* Update product */
+  /* -------------------------------------------------------
+     UPDATE PRODUCT
+  ------------------------------------------------------- */
+
   const {
     data,
     error,
   } = await supabase
     .from('products')
-    .update(cleanedUpdates)
+    .update(
+      cleanedUpdates,
+    )
     .eq('id', productId)
     .select('*')
     .single();
 
   if (error) {
-    throw new Error(getFriendlyError(error));
+    throw new Error(
+      getFriendlyError(error),
+    );
   }
 
-  /* Synchronize inventory unit */
-  if (typeof updates.unit === 'string') {
-    const unit = cleanUnit(updates.unit);
+  /* -------------------------------------------------------
+     SYNCHRONIZE EXISTING INVENTORY UNIT
+  ------------------------------------------------------- */
+
+  if (
+    typeof updates.unit ===
+    'string'
+  ) {
+    const unit =
+      cleanUnit(
+        updates.unit,
+      );
 
     const {
-      error: inventoryError,
+      error:
+        inventoryError,
     } = await supabase
       .from('inventory')
       .update({
@@ -352,11 +484,18 @@ export async function updateProduct(
         updated_at:
           new Date().toISOString(),
       })
-      .eq('product_id', productId);
+      .eq(
+        'product_id',
+        productId,
+      );
 
+    /*
+     * Inventory may not exist.
+     * That is perfectly valid.
+     */
     if (inventoryError) {
       console.warn(
-        'Product updated, but inventory unit could not be synchronized:',
+        'Product updated, but existing inventory unit could not be synchronized:',
         inventoryError,
       );
     }
@@ -369,22 +508,45 @@ export async function updateProduct(
    DELETE PRODUCT
 ========================================================= */
 
+/*
+ * PERMANENT DELETE FLOW
+ *
+ * 1. Verify product exists.
+ * 2. Remove product reference from historical order_items.
+ * 3. Delete inventory records.
+ * 4. Delete the product.
+ * 5. Verify the product no longer exists.
+ *
+ * Historical orders are NOT deleted.
+ * Their product_id becomes NULL while their
+ * stored product information remains available.
+ */
+
 export async function deleteProduct(
   productId: string,
 ): Promise<void> {
-  const id = productId?.trim();
+  const id =
+    productId?.trim();
 
   if (!id) {
-    throw new Error('Product ID is required.');
+    throw new Error(
+      'Product ID is required.',
+    );
   }
 
-  /* Verify product exists */
+  /* -------------------------------------------------------
+     VERIFY PRODUCT
+  ------------------------------------------------------- */
+
   const {
     data: product,
-    error: productFetchError,
+    error:
+      productFetchError,
   } = await supabase
     .from('products')
-    .select('id, name')
+    .select(
+      'id, name, category, unit',
+    )
     .eq('id', id)
     .maybeSingle();
 
@@ -402,46 +564,142 @@ export async function deleteProduct(
     );
   }
 
-  /* Delete inventory */
+  /* -------------------------------------------------------
+     UNLINK HISTORICAL ORDER ITEMS
+  ------------------------------------------------------- */
+
+  /*
+   * Do NOT delete order_items.
+   *
+   * Historical orders must remain.
+   *
+   * product_id is made NULL so the product can
+   * be permanently removed from products.
+   */
+
   const {
-    error: inventoryDeleteError,
+    error:
+      orderItemsError,
+  } = await supabase
+    .from('order_items')
+    .update({
+      product_id: null,
+    })
+    .eq(
+      'product_id',
+      id,
+    );
+
+  if (orderItemsError) {
+    const message =
+      orderItemsError.message
+        ?.toLowerCase() ??
+      '';
+
+    /*
+     * If the table/column is not accessible
+     * because of RLS, give a clear message.
+     */
+    if (
+      message.includes(
+        'row-level security',
+      ) ||
+      message.includes(
+        'permission',
+      ) ||
+      message.includes(
+        'policy',
+      )
+    ) {
+      throw new Error(
+        `The product "${product.name}" could not be permanently deleted because the database does not allow updating its historical order references. Check the order_items UPDATE RLS policy.`,
+      );
+    }
+
+    throw new Error(
+      `Unable to unlink historical orders for "${product.name}". ${getFriendlyError(
+        orderItemsError,
+      )}`,
+    );
+  }
+
+  /* -------------------------------------------------------
+     DELETE INVENTORY
+  ------------------------------------------------------- */
+
+  const {
+    error:
+      inventoryDeleteError,
   } = await supabase
     .from('inventory')
     .delete()
-    .eq('product_id', id);
+    .eq(
+      'product_id',
+      id,
+    );
 
   if (inventoryDeleteError) {
     throw new Error(
-      `Unable to delete the inventory record for "${product.name}". ${getFriendlyError(
+      `Unable to delete inventory for "${product.name}". ${getFriendlyError(
         inventoryDeleteError,
       )}`,
     );
   }
 
-  /* Delete product */
+  /* -------------------------------------------------------
+     DELETE PRODUCT
+  ------------------------------------------------------- */
+
   const {
     data: deletedRows,
-    error: productDeleteError,
+    error:
+      productDeleteError,
   } = await supabase
     .from('products')
     .delete()
-    .eq('id', id)
+    .eq(
+      'id',
+      id,
+    )
     .select('id');
 
   if (productDeleteError) {
     const message =
-      productDeleteError.message?.toLowerCase() ??
+      productDeleteError.message
+        ?.toLowerCase() ??
       '';
 
     if (
-      message.includes('foreign key') ||
-      message.includes('violates') ||
-      message.includes('referenced')
+      message.includes(
+        'foreign key',
+      ) ||
+      message.includes(
+        'violates',
+      ) ||
+      message.includes(
+        'referenced',
+      )
     ) {
       throw new Error(
-        `Product "${product.name}" cannot be permanently deleted because another record is using it. ${getFriendlyError(
+        `Product "${product.name}" is still referenced by another database record. The historical order reference should be removed before deleting the product. ${getFriendlyError(
           productDeleteError,
         )}`,
+      );
+    }
+
+    if (
+      message.includes(
+        'row-level security',
+      ) ||
+      message.includes(
+        'permission',
+      ) ||
+      message.includes(
+        'policy',
+      )
+    ) {
+      throw new Error(
+        `The product "${product.name}" could not be permanently deleted because your Supabase DELETE policy does not allow deleting products.`,
       );
     }
 
@@ -461,10 +719,14 @@ export async function deleteProduct(
     );
   }
 
-  /* Verify deletion */
+  /* -------------------------------------------------------
+     VERIFY PRODUCT IS GONE
+  ------------------------------------------------------- */
+
   const {
     data: remainingProduct,
-    error: verifyError,
+    error:
+      verifyError,
   } = await supabase
     .from('products')
     .select('id')
@@ -473,7 +735,7 @@ export async function deleteProduct(
 
   if (verifyError) {
     throw new Error(
-      `The product deletion was submitted, but it could not be verified. ${getFriendlyError(
+      `The product was deleted, but deletion could not be verified. ${getFriendlyError(
         verifyError,
       )}`,
     );
@@ -496,7 +758,8 @@ export async function searchProducts(
   const searchTerm =
     query.trim().toLowerCase();
 
-  const products = await fetchProducts(true);
+  const products =
+    await fetchProducts(true);
 
   if (!searchTerm) {
     return products;
@@ -505,18 +768,30 @@ export async function searchProducts(
   return products.filter(
     (product) => {
       const name =
-        product.name?.toLowerCase() ?? '';
+        product.name
+          ?.toLowerCase() ??
+        '';
 
       const category =
-        product.category?.toLowerCase() ?? '';
+        product.category
+          ?.toLowerCase() ??
+        '';
 
       const unit =
-        product.unit?.toLowerCase() ?? '';
+        product.unit
+          ?.toLowerCase() ??
+        '';
 
       return (
-        name.includes(searchTerm) ||
-        category.includes(searchTerm) ||
-        unit.includes(searchTerm)
+        name.includes(
+          searchTerm,
+        ) ||
+        category.includes(
+          searchTerm,
+        ) ||
+        unit.includes(
+          searchTerm,
+        )
       );
     },
   );
@@ -603,3 +878,4 @@ export const SEED_PRODUCTS = [
     unit: 'kg',
   },
 ] as const;
+

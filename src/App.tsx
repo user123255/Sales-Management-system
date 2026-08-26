@@ -27,7 +27,7 @@ import Receipts from './pages/Receipts';
 
 import { DebtorAccounts } from './pages/DebtorAccounts';
 import { Invoices } from './pages/Invoices';
-import { Inventory } from './pages/Inventory';
+import Inventory from './pages/Inventory';
 import { Products } from './pages/Products';
 import { Reports } from './pages/Reports';
 import Notifications from './pages/Notifications';
